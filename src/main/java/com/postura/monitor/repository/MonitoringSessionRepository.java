@@ -1,4 +1,7 @@
 package com.postura.monitor.repository;
 
-public class MonitoringSessionRepository {
+import com.postura.monitor.entity.MonitoringSession;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface MonitoringSessionRepository extends JpaRepository<MonitoringSession, Long> {
 }
