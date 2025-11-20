@@ -36,27 +36,25 @@ public class SecurityConfig {
                 // CORS 허용
                 .cors(Customizer.withDefaults())
 
-                // 세션 비활성화
+                // 세션 비활성화 (JWT 기반)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // 인가 규칙
+                // 인가 규칙 설정
                 .authorizeHttpRequests(auth -> auth
-
-                        // 인증 없이 접근 가능한 공개 API
                         .requestMatchers(
-                                "/",                 // 홈
-                                "/api/auth/**",      // 로그인/회원가입
-                                "/api/content/**",   // ⭐ 콘텐츠 API (공개)
-                                "/error"             // 오류 핸들러
+                                "/",                // 홈
+                                "/api/auth/**",     // 로그인/회원가입
+                                "/api/content/**",  // 콘텐츠 API (공개)
+                                "/error"
                         ).permitAll()
 
-                        // 이외 API는 인증 필요
+                        // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
 
-                // JWT 인증 필터 추가
+                // JWT 필터 추가
                 .addFilterBefore(
                         new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class
