@@ -11,6 +11,4 @@ public enum SessionStatus {
     /** 사용자가 모니터링을 완료하고 종료한 상태 */
     COMPLETED
 
-    // 재가동(Restart)은 상태 자체가 아닌, PAUSED -> STARTED로의 전환 행위로 처리
-
 }
