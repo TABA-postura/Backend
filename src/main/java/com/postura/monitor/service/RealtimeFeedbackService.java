@@ -5,9 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -19,6 +19,9 @@ public class RealtimeFeedbackService {
     // Redis에 저장할 키의 접두사: posture:feedback:<userId>
     private static final String FEEDBACK_KEY_PREFIX = "posture:feedback:";
 
+    // List 직렬화/역직렬화를 위한 구분자
+    private static final String STATE_DELIMITER = ",";
+
     // 캐시 만료 시간 (예: 10분, 사용자가 오랫동안 모니터링을 중단했을 경우)
     // -> 오래된 데이터를 Redis에서 자동으로 제거하여 메모리 리소스 확보
     private static final long CACHE_EXPIRATION_MINUTES = 10;
@@ -26,14 +29,17 @@ public class RealtimeFeedbackService {
     /**
      * FastAPI 로그 수신 후, 최신 자세 상태를 Redis Hash 구조에 저장
      * @param userId 사용자 ID
-     * @param postureState 현재 자세 상태
+     * @param postureStates 현재 자세 상태
      */
-    public void updatePostureCache(Long userId, String postureState) {
+    public void updatePostureCache(Long userId, List<String> postureStates) {
         String redisKey = FEEDBACK_KEY_PREFIX + userId;
+
+        // List<String>을 단일 String으로 변환 (직렬화)
+        String statesString = String.join(STATE_DELIMITER, postureStates);
 
         // Hash 구조에 저장할 데이터 구성
         Map<String, String> data = new HashMap<>();
-        data.put("postureState", postureState);
+        data.put("states", statesString);
         data.put("timestamp", LocalDateTime.now().toString());
 
         // Redis에 데이터 저장 및 만료 시간 설정
@@ -55,20 +61,33 @@ public class RealtimeFeedbackService {
         if (cachedData.isEmpty() || !cachedData.containsKey("state")) {
             // 데이터가 없거나 유효하지 않은 경우
             return RealtimeFeedbackResponse.builder()
-                    .currentPostureState("UNKNOWN")
-                    .feedbackMessage("모니터링 데이터를 기다리는 중입니다.")
+                    .currentPostureStates(Collections.singletonList("UNKNOWN"))
+                    .feedbackMessages(Collections.singletonList("모니터링 데이터를 기다리는 중입니다."))
                     .currentTime(LocalDateTime.now().toString())
                     .build();
         }
-        String postureState = (String) cachedData.get("state");
+        String statesString = (String) cachedData.get("states");
         String currentTime = (String) cachedData.getOrDefault("timestamp", LocalDateTime.now().toString());
 
-        // 조회된 자세 상태를 기반으로 피드백 메세지 생성
-        String message = generateFeedbackMessage(postureState);
+        // Redis 문자열을 List<String>으로 복원 (역직렬화)
+        List<String> postureStates;
+        if (statesString == null || statesString.isEmpty()) {
+            postureStates = Collections.singletonList("UNKNOWN");
+        } else {
+            postureStates = Arrays.stream(statesString.split(STATE_DELIMITER))
+                    .filter(s -> !s.trim().isEmpty())
+                    .map(String::trim)
+                    .collect(Collectors.toList());
+        }
+
+        // 복수 상태에 대한 피드백 메시지 목록 생성
+        List<String> feedbackMessages = postureStates.stream()
+                .map(this::getSingleFeedbackMessage)
+                .collect(Collectors.toList());
 
         return RealtimeFeedbackResponse.builder()
-                .currentPostureState(postureState)
-                .feedbackMessage(message)
+                .currentPostureStates(postureStates)
+                .feedbackMessages(feedbackMessages)
                 .currentTime(currentTime)
                 .build();
     }
@@ -76,8 +95,9 @@ public class RealtimeFeedbackService {
     /**
      * 자세 상태에 따라 사용자에게 보낼 코칭 메시지를 생성하는 로직
      * @param postureState FastAPI로부터 수신된 자세 상태 신호 (ex. "FORWARD_HEAD")
+     * @return 단일 피드백 메시지
      */
-    private String generateFeedbackMessage(String postureState) {
+    private String getSingleFeedbackMessage(String postureState) {
         switch (postureState) {
             case "Good":
                 return "훌륭합니다! 현재 바른 자세를 유지하고 있습니다. 이 상태를 계속 유지하세요.";
