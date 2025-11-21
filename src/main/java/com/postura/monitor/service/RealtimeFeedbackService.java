@@ -2,6 +2,7 @@ package com.postura.monitor.service;
 
 import com.postura.dto.ai.RealtimeFeedbackResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
@@ -12,6 +13,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RealtimeFeedbackService {
 
     private final StringRedisTemplate redisTemplate;
@@ -32,19 +34,27 @@ public class RealtimeFeedbackService {
      * @param postureStates 현재 자세 상태
      */
     public void updatePostureCache(Long userId, List<String> postureStates) {
-        String redisKey = FEEDBACK_KEY_PREFIX + userId;
+        try {
+            String redisKey = FEEDBACK_KEY_PREFIX + userId;
 
-        // List<String>을 단일 String으로 변환 (직렬화)
-        String statesString = String.join(STATE_DELIMITER, postureStates);
+            // List<String>을 단일 String으로 변환 (직렬화)
+            String statesString = String.join(STATE_DELIMITER, postureStates);
 
-        // Hash 구조에 저장할 데이터 구성
-        Map<String, String> data = new HashMap<>();
-        data.put("states", statesString);
-        data.put("timestamp", LocalDateTime.now().toString());
+            // Hash 구조에 저장할 데이터 구성
+            Map<String, String> data = new HashMap<>();
+            data.put("states", statesString);
+            data.put("timestamp", LocalDateTime.now().toString());
 
-        // Redis에 데이터 저장 및 만료 시간 설정
-        redisTemplate.opsForHash().putAll(redisKey, data);
-        redisTemplate.expire(redisKey, CACHE_EXPIRATION_MINUTES, TimeUnit.MINUTES);
+            // Redis에 데이터 저장 및 만료 시간 설정
+            redisTemplate.opsForHash().putAll(redisKey, data);
+            redisTemplate.expire(redisKey, CACHE_EXPIRATION_MINUTES, TimeUnit.MINUTES);
+
+        } catch (Exception e) {
+            // Redis 통신 실패는 핵심 로그 저장(RDS)에 영향을 주지 않도록 처리 (관련 클래스: PostureLogService)
+            // -> updatePostureCache가 실패할 경우, 로그 수신 파이프라인 전체가 실패하지 않음
+            log.error("Failed to update Redis cache for user {}: {}", userId, e.getMessage());
+            // 예외를 다시 던지지 않음 (swallow exception)
+        }
     }
 
     /**
