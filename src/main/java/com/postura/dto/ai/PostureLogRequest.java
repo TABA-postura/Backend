@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * FastAPI 서버로부터 실시간 자세 로그를 수신하기 위한 DTO
@@ -22,7 +23,7 @@ public class PostureLogRequest {
     private Long sessionId;
 
     @NotNull
-    private String postureStatus;
+    private List<String> postureStates;
 
     @NotNull
     private LocalDateTime timestamp;
