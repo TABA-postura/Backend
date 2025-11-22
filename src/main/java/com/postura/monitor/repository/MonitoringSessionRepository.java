@@ -1,6 +1,7 @@
 package com.postura.monitor.repository;
 
 import com.postura.monitor.entity.MonitoringSession;
+import com.postura.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
@@ -13,4 +14,5 @@ public interface MonitoringSessionRepository extends JpaRepository<MonitoringSes
      */
     Optional<MonitoringSession> findByIdandUserId(Long sessionId, Long userId);
 
+    Long user(User user);
 }

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Getter
+@Builder
 @NoArgsConstructor(access =  AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Table(name = "monitoring_session")
@@ -40,8 +41,9 @@ public class MonitoringSession {
     private LocalDateTime pausedAt; // 마지막으로 일시정지된 시각 (PAUSED 상태일 때 사용)
 
     // 5. 일시정지 시간까지의 누적 분석 시간 (초 단위)
-    @Column(name = "accmulated_duration_seconds", nullable =  false)
-    private Long accmulatedDurationSeconds;
+    @Column(name = "accumulated_duration_seconds", nullable =  false)
+    private Long accumulatedDurationSeconds;
+
 
     // *********** 비즈니스 메서드 **************
     /**
@@ -52,7 +54,7 @@ public class MonitoringSession {
         this.status = SessionStatus.PAUSED;
         this.pausedAt = LocalDateTime.now();
         // 이전 누적 시간에 현재 Running 시간을 더하여 최종 누적 시간 갱신
-        this.accmulatedDurationSeconds += currentDurationSeconds;
+        this.accumulatedDurationSeconds += currentDurationSeconds;
     }
 
     /**
@@ -62,7 +64,7 @@ public class MonitoringSession {
     public void resume() {
         // PAUSED 상태에서만 호출되어야 함 (Service 검증)
         this.status = SessionStatus.STARTED;
-        this.pausedAt = null; // 재개 시 pausedAt 초기화
+        this.pausedAt = LocalDateTime.now(); // 재개 시 pausedAt 초기화
         // accumulatedDurationSeconds는 그대로 유지함
     }
 
@@ -71,7 +73,7 @@ public class MonitoringSession {
      */
     public void complete(long finalDurationSeconds) {
         // 최종 누적 시간에 마지막 Running 시간을 더하여 총 분석 시간 확정
-        this.accmulatedDurationSeconds += finalDurationSeconds;
+        this.accumulatedDurationSeconds += finalDurationSeconds;
         this.status = SessionStatus.COMPLETED;
         this.endAt = LocalDateTime.now();
     }
