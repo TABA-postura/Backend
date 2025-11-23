@@ -31,7 +31,7 @@ public class LogReceiverController {
      * [엔드포인트] : POST /ai/log
      * FastAPI로 부터 실시간 자세 로그를 수신
      * @param request (PostureLogRequest)
-     * @return 202 Accepted (비동기 처리 후 즉시 응답
+     * @return 202 Accepted (비동기 처리 후 즉시 응답)
      */
     public ResponseEntity<Void> receivePostureLog(
         // @Vaild 사용 -> DTO의 NotNull 제약 조건 검사
