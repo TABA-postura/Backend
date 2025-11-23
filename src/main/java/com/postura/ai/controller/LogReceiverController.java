@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +34,7 @@ public class LogReceiverController {
      * @param request (PostureLogRequest)
      * @return 202 Accepted (비동기 처리 후 즉시 응답)
      */
+    @PostMapping("/log")
     public ResponseEntity<Void> receivePostureLog(
         // @Vaild 사용 -> DTO의 NotNull 제약 조건 검사
         @Valid @RequestBody PostureLogRequest request)
