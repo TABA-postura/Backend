@@ -6,6 +6,7 @@ import com.postura.dto.monitor.SessionStartResponse;
 import com.postura.monitor.entity.MonitoringSession;
 import com.postura.monitor.entity.SessionStatus;
 import com.postura.monitor.repository.MonitoringSessionRepository;
+import com.postura.report.service.StatAggregationService;
 import com.postura.user.entity.User;
 import com.postura.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -13,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
@@ -23,6 +25,7 @@ public class MonitoringService {
 
     private final MonitoringSessionRepository sessionRepository;
     private final UserRepository userRepository;
+    private final StatAggregationService  statAggregationService;
 
     /**
      * 세션 시작 (START)
@@ -120,7 +123,18 @@ public class MonitoringService {
         session.complete(lastRunningDuration);
         sessionRepository.save(session);
 
-        // 3. React가 성공 응답 받은 후 이미지 전송 멈춤
+        // 3. 오늘 날짜 통계 즉시 업데이트 로직
+        try {
+            LocalDate today = LocalDate.now();
+            // 해당 사용자의 오늘 통계만 즉시 재계산 및 업데이트 (UPSERT)
+            statAggregationService.aggregateStatsForUser(userId, today);
+            log.info("On-demand stats update complete for user {} on {}.", userId, today);
+        } catch (Exception e) {
+            // 통계 집계 실패는 세션 종료 자체를 막아서는 안 됨 (로그만 남김)
+            log.error("Failed to run on-demand aggregation after session completion: {}", e.getMessage());
+        }
+
+        // 4. React가 성공 응답 받은 후 이미지 전송 멈춤
         log.info("Session COMPLETED: SessionId={}. Total Duration: {}", sessionId, session.getAccumulatedDurationSeconds());
     }
 
