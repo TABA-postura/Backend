@@ -70,4 +70,46 @@ public class ContentService {
                 .relatedPosture(content.getRelatedPosture())
                 .build();
     }
+
+    // *************************************************************
+    // REPORT 모듈 연동을 위한 메서드 추가 (핵심)
+    // *************************************************************
+
+    /**
+     * Report 모듈에서 가장 빈번한 문제 유형을 기반으로 스트레칭 가이드를 조회합니다.
+     * Content 엔티티의 relatedPosture 필드와 연결합니다.
+     * @param problemType AI 감지 신호 (예: "FORWARD_HEAD", "UNE_SHOULDER")
+     * @return Content 엔티티 리스트
+     */
+    public List<Content> getGuidesByProblemType(String problemType) {
+
+        // 1. AI 신호를 Content 엔티티의 'relatedPosture' 필드 값에 맞게 변환해야 합니다.
+        //    (예: "FORWARD_HEAD" -> "목")
+        String relatedPostureKeyword = mapProblemTypeToPostureKeyword(problemType);
+
+        // 2. ContentRepository를 사용하여 해당 키워드와 관련된 가이드 조회
+        //    (findByRelatedPosture 메서드가 ContentRepository에 정의되어야 함을 가정합니다.)
+        return contentRepository.findByRelatedPosture(relatedPostureKeyword);
+    }
+
+    /**
+     * AI 문제 유형 코드를 Content 엔티티의 relatedPosture 키워드로 변환합니다.
+     */
+    private String mapProblemTypeToPostureKeyword(String problemType) {
+        // 문제 유형에 따라 Content.relatedPosture에 정의된 키워드 (목, 어깨, 상체)를 반환합니다.
+        switch (problemType) {
+            case "FORWARD_HEAD":
+            case "HEAD_TILT":
+                return "목";
+            case "UNE_SHOULDER":
+            case "ARM_LEAN":
+                return "어깨";
+            case "UPPER_TILT":
+            case "ASYMMETRIC":
+            case "TOO_CLOSE":
+                return "상체"; // 또는 복합적인 문제를 커버할 수 있는 키워드
+            default:
+                return ""; // 해당 없음 (Good이거나 정의되지 않은 경우)
+        }
+    }
 }
