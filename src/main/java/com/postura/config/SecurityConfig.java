@@ -13,6 +13,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -30,38 +35,43 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                // CSRF 비활성화 (JWT 구조)
                 .csrf(csrf -> csrf.disable())
-
-                // CORS 허용
                 .cors(Customizer.withDefaults())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 세션 비활성화
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-
-                // 인가 규칙
                 .authorizeHttpRequests(auth -> auth
+                        // Pre-flight OPTIONS 요청 허용
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 인증 없이 접근 가능한 공개 API
-                        .requestMatchers(
-                                "/",                 // 홈
-                                "/api/auth/**",      // 로그인/회원가입
-                                "/api/content/**",   // ⭐ 콘텐츠 API (공개)
-                                "/error"             // 오류 핸들러
-                        ).permitAll()
+                        // 정적 파일
+                        .requestMatchers("/videos/**", "/photo/**").permitAll()
 
-                        // 이외 API는 인증 필요
+                        // 회원가입/로그인 전체 허용 ⭐⭐⭐⭐⭐
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // 메인/컨텐츠 API 허용
+                        .requestMatchers("/", "/api/content/**", "/error").permitAll()
+
                         .anyRequest().authenticated()
                 )
 
-                // JWT 인증 필터 추가
-                .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider),
-                        UsernamePasswordAuthenticationFilter.class
-                );
+                // JWT 필터 추가
+                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
+                        UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }
