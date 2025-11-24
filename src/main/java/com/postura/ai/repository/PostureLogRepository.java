@@ -4,6 +4,9 @@ import com.postura.ai.entity.PostureLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 /**
  * PostureLog (자세 로그 엔티티)에 대한 DB 접근을 담당하는 Repository
  * JpaRepository를 상속받아 기본적인 CRUD 메서드를 자동으로 제공 받음
@@ -19,4 +22,10 @@ public interface PostureLogRepository extends JpaRepository<PostureLog, Long> {
     delete(PostureLog log) : 로그 삭제
     ------------------------------------------
      */
+
+    List<PostureLog> findAllByUserIdAndTimestampBetweenOrderByTimestampAsc(
+            Long userId,
+            LocalDateTime start,
+            LocalDateTime end
+    );
 }
