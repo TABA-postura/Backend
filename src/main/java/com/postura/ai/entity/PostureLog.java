@@ -1,11 +1,13 @@
 package com.postura.ai.entity;
 
+import com.postura.common.util.StringListConverter;
 import com.postura.dto.ai.PostureLogRequest;
 import com.postura.monitor.entity.MonitoringSession;
 import com.postura.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Getter
@@ -30,8 +32,9 @@ public class PostureLog {
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
 
-    @Column(name = "posture_state", length = 50, nullable = false)
-    private String postureState;
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "posture_states", columnDefinition = "TEXT", nullable = false)
+    private List<String> postureStates;
 
     @Lob
     @Column(name = "landmark_data")
@@ -49,7 +52,7 @@ public class PostureLog {
         return PostureLog.builder()
                 .user(user)
                 .session(session)
-                .postureState(request.getPostureStatus())
+                .postureStates(request.getPostureStates())
                 .timestamp(request.getTimestamp())
                 .landmarkData(request.getLandmarkData())
                 .build();

@@ -47,8 +47,6 @@ public class PostureLogService {
         // 최신 자세 상태를 Redis에 캐시하도록 monitor 모듈에 위임
         realtimeFeedbackService.updatePostureCache(
                 request.getUserId(),
-                request.getPostureStatus(),
-                request.getLandmarkData());
-
+                request.getPostureStates());
     }
 }

@@ -1,0 +1,154 @@
+package com.postura.monitor.service;
+
+import com.postura.common.exception.CustomException;
+import com.postura.common.exception.ErrorCode;
+import com.postura.dto.monitor.SessionStartResponse;
+import com.postura.monitor.entity.MonitoringSession;
+import com.postura.monitor.entity.SessionStatus;
+import com.postura.monitor.repository.MonitoringSessionRepository;
+import com.postura.user.entity.User;
+import com.postura.user.repository.UserRepository;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class MonitoringService {
+
+    private final MonitoringSessionRepository sessionRepository;
+    private final UserRepository userRepository;
+
+    /**
+     * 세션 시작 (START)
+     * @param userId
+     * @return SessionStartResponse
+     */
+    @Transactional
+    public SessionStartResponse startSession(Long userId) {
+        // 1. User 조회 및 유효성 검증
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 2. MonitoringSession 엔티티 생성 및 DB 저장 (STARTED 상태)
+        MonitoringSession session = MonitoringSession.builder()
+                .user(user)
+                .status(SessionStatus.STARTED)
+                .startAt(LocalDateTime.now())
+                .accumulatedDurationSeconds(0L)
+                .build();
+        session =  sessionRepository.save(session);
+
+        // 3. React에 SessionStartResponse 반환
+        // (React는 해당 응답을 받은 후 reset=true 플래그와 함께 FastAPI에 이미지 전송)
+        log.info("Session STARTED: UserId={}, SessionId={}", userId, session.getId());
+        return new SessionStartResponse(session.getId(), session.getStartAt().toString());
+    }
+
+    /**
+     * 일시 정지 (PAUSED)
+     * @param sessionId
+     * @param userId
+     */
+    @Transactional
+    public void pauseSession (Long sessionId, Long userId) {
+        MonitoringSession session = getSession(sessionId,userId);
+
+        if (session.getStatus() != SessionStatus.STARTED) {
+            throw new CustomException(ErrorCode.INVALID_SESSION_STATUS, "PAUSE는 STARTED 상태에서만 가능합니다.");
+        }
+
+        // 1. 현재 진행 시간 계산 (SECONDS)
+        // pausedAt이 Null이면 startAt을 기준으로, 아니면 pausedAt을 기준으로 현재까지의 시간 계산
+        long currentRunningDuration = calculateRunningDuration(session);
+
+        // 2. Entity 업데이트 및 DB 저장 (PAUSED 상태로 변경)
+        session.pause(currentRunningDuration);
+        sessionRepository.save(session);
+
+        // 3. AI 로그 전송 중단 명령 없음 (React가 이미지 전송을 멈추면 FastAPI가 스스로 중단함)
+        log.info("Session PAUSED: SessionId={}, Accumulated Seconds: {}", sessionId, session.getAccumulatedDurationSeconds());
+    }
+
+    /**
+     * 재개 (RESUME)
+     * @param sessionId
+     * @param userId
+     */
+    @Transactional
+    public void resumeSession (Long sessionId, Long userId) {
+        MonitoringSession session = getSession(sessionId,userId);
+
+        if (session.getStatus() != SessionStatus.PAUSED) {
+            throw new CustomException(ErrorCode.INVALID_SESSION_STATUS, "RESUME은 PAUSED 상태에서만 가능합니다.");
+        }
+
+        // 1. Entity 상태 변경 및 DB 저장 (STARTED 상태로 복귀)
+        // DB 트랜잭션 무결성 보장
+        session.resume();
+        sessionRepository.save(session);
+
+        // 2. React가 성공 응답 받은 후 reset=true 플래그와 이미지를 보냄
+        log.info("Session RESUME: SessionId={}, Status set to STARTED", sessionId);
+    }
+
+    /**
+     * 종료 (COMPLETED)
+     * @param sessionId
+     * @param userId
+     */
+    @Transactional
+    public void completeSession (Long sessionId, Long userId) {
+        MonitoringSession session = getSession(sessionId,userId);
+
+        if (session.getStatus() != SessionStatus.STARTED) {
+            throw new CustomException(ErrorCode.INVALID_SESSION_STATUS, "이미 종료된 세션입니다.");
+        }
+
+        // 1. 최종 진행 시간 계산
+        long lastRunningDuration = 0;
+        if (session.getStatus() == SessionStatus.STARTED) {
+            lastRunningDuration = calculateRunningDuration(session);
+        }
+
+        // 2. Entity 최종 업데이트 및 DB 저장 (COMPLETED 상태로 변경)
+        session.complete(lastRunningDuration);
+        sessionRepository.save(session);
+
+        // 3. React가 성공 응답 받은 후 이미지 전송 멈춤
+        log.info("Session COMPLETED: SessionId={}. Total Duration: {}", sessionId, session.getAccumulatedDurationSeconds());
+    }
+
+    // ************* 유틸리티 메서드 *************
+
+    /**
+     * Session ID와 user ID를 사용하여 유효한 세션 엔티티 조회
+     * @param sessionId
+     * @param userId
+     * @return MonitoringSession
+     */
+    private MonitoringSession getSession (Long sessionId, Long userId) {
+        return sessionRepository.findByIdandUserId(sessionId, userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.SESSION_NOT_FOUND));
+    }
+
+    /**
+     * 마지막 기록된 시간부터 현재까지의 진행 시간을 계산
+     * @param session
+     * @return long
+     */
+    private long calculateRunningDuration(MonitoringSession session) {
+        LocalDateTime startTime = session.getPausedAt() != null
+                ? session.getPausedAt()
+                : session.getStartAt();
+        if (startTime == null) return 0; // 시작 시간이 없는 경우
+
+        // 시작 시간과 현재 시각의 차이를 초 단위로 반환
+        return ChronoUnit.SECONDS.between(startTime, LocalDateTime.now());
+    }
+}
