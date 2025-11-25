@@ -1,6 +1,6 @@
 package com.postura.monitor.entity;
 
-public enum SessionStatus {
+public enum SessionStats {
 
     /** 모니터링이 시작되었고 현재 활성화 상태 (로그 수신 중) */
     STARTED,
