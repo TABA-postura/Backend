@@ -27,22 +27,22 @@ public class AggregateStat {
 
     // 2. 통계 집계 기준 날짜 (ex. 2025-11-24)
     @Column(name = "stat_date", nullable = false, unique = true)
-    private LocalDate statDate;
+    private LocalDate statDate; // -> 그래프에 사용
 
     // 3. 통계 지표
     @Column(name = "correct_ratio", precision = 5, scale = 2, nullable = false)
-    private Double correctRatio; // 바른 자세 유지율 (%)
+    private Double correctRatio; // 바른 자세 유지율 (%) -> 이번 주 평균 유지율, 자세 분석 그래프
 
     @Column(name = "total_warning_count", nullable = false)
-    private Integer totalWarningCount; // 총 경고 횟수 (누적)
+    private Integer totalWarningCount; // 총 경고 횟수 (누적) -> 경고 횟수 (일/주), 일별 경고 횟수 그래프
 
     // 4. 총 분석 시간 (세션 총 합산 시간)
     @Column(name = "total_analysis_seconds", nullable = false)
-    private Long totalAnalysisSeconds;
+    private Long totalAnalysisSeconds; // -> 해당 날짜의 유지율 계산의 분모
 
     // 5. 목표 달성 기록
     @Column(name = "goal_achieved", nullable = false)
-    private boolean goalAchieved;
+    private boolean goalAchieved; // -> 해당 날짜 유지율 달성 여부
 
     // 6. 연속 목표 달성 일수 (유지율이 80% 이상일 경우 1일씩 증가)
     @Column(name = "consecutive_achieved_days", nullable = false)
