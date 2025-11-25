@@ -7,12 +7,14 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.core.env.Environment;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.Arrays;
 
 @EnableJpaAuditing
 @SpringBootApplication
 @EnableAsync
+@EnableScheduling
 public class PosturaApplication {
 
 	public static void main(String[] args) {

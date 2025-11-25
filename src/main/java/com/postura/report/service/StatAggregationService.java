@@ -10,6 +10,7 @@ import com.postura.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -35,6 +36,7 @@ public class StatAggregationService {
     // *************************************************************
     // 1. 메인 배치 실행 메서드
     // *************************************************************
+    @Scheduled(cron = "0 0 3 * * *")
     public void runDailyAggregation(LocalDate targetDate) {
 
         log.info("Starting daily aggregation for date: {}", targetDate);
@@ -141,9 +143,9 @@ public class StatAggregationService {
     /**
      * 바른 자세 유지율을 계산합니다.
      */
-    private double calculateMaintenanceRatio (long goodTime, long totalTime) {
-        if (totalTime == 0) return 0;
-        return Math.round((double) goodTime / totalTime * 10000.0) / 100.0; // 소수점 2자리 반올림
+    private double calculateMaintenanceRatio (long goodTime, long totalTimeSeconds) {
+        if (totalTimeSeconds == 0) return 0;
+        return Math.round((double) goodTime / totalTimeSeconds * 10000.0) / 100.0; // 소수점 2자리 반올림
     }
 
     /**
@@ -157,8 +159,8 @@ public class StatAggregationService {
         // 어제 날짜
         LocalDate yesterday = today.minusDays(1);
 
-        // 어제의 AggregateStat 기록 조회
-        return aggregateStatRepository.findByUserIdAndStatDate(userId, yesterday)
+        // 오늘 이전의 가장 최근 기록을 조회합니다.
+        return aggregateStatRepository.findTopByUserIdAndStatDateBeforeOrderByStatDateDesc(userId, today)
                 .filter(AggregateStat::isGoalAchieved) // 어제도 목표 달성했는지 확인
                 .map(stat -> stat.getConsecutiveAchievedDays() + 1) // 어제 일수에 +1
                 .orElse(1); // 어제 기록이 없거나 실패했다면 오늘이 1일째
