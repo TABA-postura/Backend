@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * React 프론트엔드로 전송되는 실시간 피드백 dto
@@ -25,5 +26,8 @@ public class RealtimeFeedbackResponse {
     private final Double correctPostureRatio; // 바른 자세 유지율
 
     private final Integer totalWarningCount; // 경고 횟수
+
+    // 5. 세션 내 자세 유형별 누적 횟수 (누적 자세 데이터)
+    private final Map<String, Integer> postureTypeCounts;
     
 }
