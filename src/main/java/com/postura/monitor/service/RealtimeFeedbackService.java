@@ -37,6 +37,25 @@ public class RealtimeFeedbackService {
     private static final String FIELD_WARNING_COUNT = "warning_count";
     private static final String FIELD_TOTAL_COUNT = "total_count";
 
+    // 자세 유형별 누적 카운트 필드 추가
+    private static final String FIELD_FH_COUNT = "fh_count"; // FORWARD_HEAD
+    private static final String FIELD_US_COUNT = "us_count"; // UNEVEN_SHOULDER
+    private static final String FIELD_UT_COUNT = "ut_count"; // UPPER_TILT
+    private static final String FIELD_TC_COUNT = "tc_count"; // TOO_CLOSE
+    private static final String FIELD_AS_COUNT = "as_count"; // ASYMMETRIC
+    private static final String FIELD_HT_COUNT = "ht_count"; // HEAD_TILT
+    private static final String FIELD_AL_COUNT = "al_count"; // ARM_LEAN
+
+    private static final Map<String, String> POSTURE_FIELD_MAP = Map.of(
+            "FORWARD_HEAD", FIELD_FH_COUNT,
+            "UNE_SHOULDER", FIELD_US_COUNT,
+            "UPPER_TILT", FIELD_UT_COUNT,
+            "TOO_CLOSE", FIELD_TC_COUNT,
+            "ASYMMETRIC", FIELD_AS_COUNT,
+            "HEAD_TILT", FIELD_HT_COUNT,
+            "ARM_LEAN", FIELD_AL_COUNT
+    );
+
     /**
      * FastAPI 로그 수신 후, 최신 자세 상태와 누적 통계 카운트를 Redis에 저장/갱신합니다.
      * 이 메서드는 PostureLogService에 의해 비동기로 호출됩니다.
@@ -49,21 +68,24 @@ public class RealtimeFeedbackService {
 
             // 1. 누적 카운트 계산
             long goodCount = postureStates.stream().filter("Good"::equalsIgnoreCase).count();
-            // "Good"이 아닌 모든 상태를 경고로 간주 (UNKNOWN 제외)
-            long warningCount = postureStates.stream()
-                    .filter(s -> !"Good".equalsIgnoreCase(s) && !"UNKNOWN".equalsIgnoreCase(s))
-                    .count();
 
             // 2. 누적 카운트 갱신 (Atomic Increment)
             if (goodCount > 0) {
                 redisTemplate.opsForHash().increment(redisKey, FIELD_GOOD_COUNT, goodCount);
             }
-            if (warningCount > 0) {
-                redisTemplate.opsForHash().increment(redisKey, FIELD_WARNING_COUNT, warningCount);
-            }
-            // 전체 로그 횟수 (1초에 1회 가정)
+            // 전체 로그 횟수 증가
             redisTemplate.opsForHash().increment(redisKey, FIELD_TOTAL_COUNT, 1);
 
+            // 💡 7가지 자세 유형별 누적 카운트 및 총 경고 횟수 증가
+            for (String state : postureStates) {
+                String field = POSTURE_FIELD_MAP.get(state);
+                if (field != null) {
+                    // 총 경고 횟수 증가
+                    redisTemplate.opsForHash().increment(redisKey, FIELD_WARNING_COUNT, 1);
+                    // 개별 자세 유형 카운트 증가
+                    redisTemplate.opsForHash().increment(redisKey, field, 1);
+                }
+            }
 
             // 3. 최신 상태 정보 저장
             String statesString = String.join(STATE_DELIMITER, postureStates);
@@ -85,6 +107,16 @@ public class RealtimeFeedbackService {
     }
 
     /**
+     * 모니터링 시작 시, 이전 세션의 누적 통계 데이터를 Redis에서 삭제합니다.
+     */
+    public void clearUserCache(Long userId) {
+        String redisKey = FEEDBACK_KEY_PREFIX + userId;
+        // 키 자체를 삭제하여 모든 누적 카운트를 0으로 리셋합니다.
+        redisTemplate.delete(redisKey);
+        log.info("Redis cache cleared for user {}", userId);
+    }
+
+    /**
      * 클라이언트의 풀링 요청에 응답하기 위해 Redis에서 최신 데이터를 조회하고 응답 DTO를 생성
      * @param userId 사용자 ID
      * @return RealtimeFeedbackResponse DTO
@@ -92,7 +124,7 @@ public class RealtimeFeedbackService {
     public RealtimeFeedbackResponse getRealtimeFeedback(Long userId) {
         String redisKey = FEEDBACK_KEY_PREFIX + userId;
 
-        // 1. Redis에서 Hash 데이터 전체 조회 (Map으로 받는 것이 안전함)
+        // 1. Redis에서 Hash 데이터 전체 조회
         Map<Object, Object> cachedData = redisTemplate.opsForHash().entries(redisKey);
 
         // 2. 초기 데이터 없음 처리
@@ -103,6 +135,7 @@ public class RealtimeFeedbackService {
                     .currentTime(LocalDateTime.now().toString())
                     .correctPostureRatio(0.0)
                     .totalWarningCount(0)
+                    .postureTypeCounts(Collections.emptyMap()) // 추가된 필드 초기화
                     .build();
         }
 
@@ -115,28 +148,39 @@ public class RealtimeFeedbackService {
         long warningCount = safeParseLong(cachedData.get(FIELD_WARNING_COUNT));
         long totalCount = safeParseLong(cachedData.get(FIELD_TOTAL_COUNT));
 
-        // 5. 자세 상태 및 메시지 목록 생성 (기존 로직 유지)
+        // 5. 자세 상태 및 메시지 목록 생성
         List<String> postureStates = getPostureStatesList(statesString);
         List<String> feedbackMessages = postureStates.stream()
                 .map(this::getSingleFeedbackMessage)
                 .collect(Collectors.toList());
 
         // 6. 유지율 및 경고 횟수 계산
-        Integer totalWarningCount = (int) warningCount; // 이미 누적된 경고 횟수 사용
+        Integer totalWarningCount = (int) warningCount;
         Double correctPostureRatio = 0.0;
 
         if (totalCount > 0) {
-            // 유지율 계산: (바른 자세 횟수 / 전체 로그 횟수) * 100 -> 소수점 첫째 자리까지 반올림
             correctPostureRatio = Math.round(((double) goodCount / totalCount) * 100.0 * 10.0) / 10.0;
         }
 
-        // 7. DTO 빌드
+        // 7. 자세 유형별 카운트 Map 생성 (누적 자세 데이터)
+        Map<String, Integer> postureTypeCounts = new HashMap<>();
+
+        POSTURE_FIELD_MAP.forEach((postureType, fieldKey) -> {
+            long count = safeParseLong(cachedData.get(fieldKey));
+            if (count > 0) {
+                // "FORWARD_HEAD": 23회 와 같이 저장
+                postureTypeCounts.put(postureType, (int) count);
+            }
+        });
+
+        // 8. DTO 빌드
         return RealtimeFeedbackResponse.builder()
                 .currentPostureStates(postureStates)
                 .feedbackMessages(feedbackMessages)
                 .currentTime(currentTime)
                 .correctPostureRatio(correctPostureRatio)
                 .totalWarningCount(totalWarningCount)
+                .postureTypeCounts(postureTypeCounts) // 최종 할당
                 .build();
     }
 
