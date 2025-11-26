@@ -111,7 +111,7 @@ public class JwtTokenProvider {
         CustomUserDetails principal = new CustomUserDetails(
                 // 임시 User 객체 생성 (실제 DB 조회 아님)
                 com.postura.user.entity.User.builder()
-                        .id(userIdFromToken) //
+                        .id(userIdFromToken) // 추가
                         .email(claims.getSubject())
                         .passwordHash("") // 비밀번호는 토큰에 없으므로 빈 값
                         .name("N/A")

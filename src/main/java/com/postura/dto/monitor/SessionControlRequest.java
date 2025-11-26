@@ -13,10 +13,7 @@ import lombok.NoArgsConstructor;
 public class SessionControlRequest {
 
     // 세션 시작 요철 시에는 null, 이후 제어 요청 시에는 필수
+    // @NotNull을 제거하여 startSession에서도 사용 가능하게 합니다.
     private Long sessionId;
-
-    // JWT에서 추출되어야 하지만, 현재 구현의 편의를 위해 DTO에 포함
-    @NotNull
-    private Long userId;
 
 }
