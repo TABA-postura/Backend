@@ -23,6 +23,11 @@ public class CustomUserDetails implements UserDetails {
         this.user = user;
     }
 
+    // **추가: Controller에서 Principal로 userId를 안전하게 추출하기 위한 메서드
+    public Long getUserId() {
+        // User 엔티티가 getId()를 가진다고 가정
+        return user.getId();
+    }
 
     // 사용자 권한을 Spring Security 권한 객체로 변환하여 반환
     @Override
