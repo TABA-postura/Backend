@@ -26,6 +26,7 @@ public class MonitoringService {
     private final MonitoringSessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final StatAggregationService  statAggregationService;
+    private final RealtimeFeedbackService realtimeFeedbackService;
 
     /**
      * 세션 시작 (START)
@@ -38,7 +39,10 @@ public class MonitoringService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 2. MonitoringSession 엔티티 생성 및 DB 저장 (STARTED 상태)
+        // 2. 새로운 세션 시작 전, 이전 세션의 Redis 캐시 데이터 초기화 (누적 통계 0으로 리셋)
+        realtimeFeedbackService.clearUserCache(userId);
+
+        // 3. MonitoringSession 엔티티 생성 및 DB 저장 (STARTED 상태)
         MonitoringSession session = MonitoringSession.builder()
                 .user(user)
                 .status(SessionStatus.STARTED)
@@ -47,7 +51,7 @@ public class MonitoringService {
                 .build();
         session =  sessionRepository.save(session);
 
-        // 3. React에 SessionStartResponse 반환
+        // 4. React에 SessionStartResponse 반환
         // (React는 해당 응답을 받은 후 reset=true 플래그와 함께 FastAPI에 이미지 전송)
         log.info("Session STARTED: UserId={}, SessionId={}", userId, session.getId());
         return new SessionStartResponse(session.getId(), session.getStartAt().toString());
@@ -109,7 +113,7 @@ public class MonitoringService {
     public void completeSession (Long sessionId, Long userId) {
         MonitoringSession session = getSession(sessionId,userId);
 
-        if (session.getStatus() != SessionStatus.STARTED) {
+        if (session.getStatus() == SessionStatus.COMPLETED) {
             throw new CustomException(ErrorCode.INVALID_SESSION_STATUS, "이미 종료된 세션입니다.");
         }
 
