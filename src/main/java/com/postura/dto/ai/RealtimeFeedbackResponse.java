@@ -20,5 +20,10 @@ public class RealtimeFeedbackResponse {
 
     // 3. 현재 시간 (프론트엔드 동기화 용)
     private String currentTime;
+
+    // 4. 실시간 통계 데이터
+    private final Double correctPostureRatio; // 바른 자세 유지율
+
+    private final Integer totalWarningCount; // 경고 횟수
     
 }
