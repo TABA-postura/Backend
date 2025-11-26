@@ -58,7 +58,7 @@ public class SessionController {
     /**
      * [POST /monitor/resume] 모니터링 세션 재개 요철
      */
-    @PostMapping("/pause")
+    @PostMapping("/resume")
     public ResponseEntity<Void> resumeSession(
             @Valid @RequestBody SessionControlRequest request)
     {
