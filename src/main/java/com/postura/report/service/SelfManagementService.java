@@ -40,7 +40,7 @@ public class SelfManagementService {
             weekEnd = today; // 조회 기간이 미래를 넘지 않도록 조정
         }
 
-        // 1. 기간 내 모든 AggregateStat 조회
+        // 1. 기간 내(이번 주) 모든 AggregateStat 조회
         List<AggregateStat> weeklyStats = aggregateStatRepository
                 .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, weekStart, weekEnd);
 
@@ -49,9 +49,17 @@ public class SelfManagementService {
             throw new CustomException(ErrorCode.SESSION_NOT_FOUND, "해당 기간의 통계 데이터가 없습니다.");
         }
 
-        // 2. 데이터 가공 및 분석
+        // 2. 지난 주 통계 조회 (전주 대비 변화율 계산을 위해)
+        List<AggregateStat> previousWeeklyStats = getPreviousWeeklyStats(userId, weekStart);
+
+        // 3. 데이터 가공 및 분석
         Map<String, Integer> distribution = calculatePostureDistribution(weeklyStats);
         String mostFrequentIssue = findMostFrequentIssue(distribution);
+
+        // 4. 추가 지표 계산
+        Double weeklyAvgRatio = calculateAverageRatio(weeklyStats);
+        Integer weeklyTotalWarning = calculateTotalWarning(weeklyStats);
+        Double ratioChangeVsPreviousWeek = calculateRatioChange(weeklyAvgRatio, previousWeeklyStats);
 
         // 3. DTO 빌드 및 반환
         AggregateStat latestStat = weeklyStats.get(weeklyStats.size() - 1);
@@ -64,9 +72,13 @@ public class SelfManagementService {
 
                 // 요약 데이터 (가장 최근 기록을 사용)
                 .currentAvgRatio(latestStat.getCorrectRatio())
+                .weeklyAvgRatio(weeklyAvgRatio)
                 .currentTotalWarning(latestStat.getTotalWarningCount())
                 .currentConsecutiveAchievedDays(latestStat.getConsecutiveAchievedDays())
                 .mostFrequentIssue(mostFrequentIssue)
+
+                .weeklyTotalWarning(weeklyTotalWarning) // 주간 합산 경고 횟수
+                .ratioChangeVsPreviousWeek(ratioChangeVsPreviousWeek) // 전주 대비 변화율
 
                 // 분포 및 추천
                 .postureDistribution(distribution)
@@ -77,6 +89,58 @@ public class SelfManagementService {
     // *************************************************************
     // 2. 헬퍼 메서드 (분포 및 추천 로직)
     // *************************************************************
+
+    /**
+     * 지난 주의 통계 데이터를 조회합니다.
+     */
+    private List<AggregateStat> getPreviousWeeklyStats(Long userId, LocalDate currentWeekStart) {
+        LocalDate previousWeekEnd = currentWeekStart.minusDays(1);
+        LocalDate previousWeekStart = previousWeekEnd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+
+        return aggregateStatRepository
+                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, previousWeekStart, previousWeekEnd);
+    }
+
+    /**
+     * 주간 통계 목록의 평균 유지율을 계산합니다.
+     */
+    private Double calculateAverageRatio(List<AggregateStat> stats) {
+        if (stats.isEmpty()) return 0.0;
+
+        double avg = stats.stream()
+                .mapToDouble(AggregateStat::getCorrectRatio)
+                .average()
+                .orElse(0.0);
+
+        // 소수점 둘째 자리까지 반올림
+        return Math.round(avg * 100.0) / 100.0;
+    }
+
+    /**
+     * 주간 통계 목록의 총 경고 횟수를 합산합니다.
+     */
+    private Integer calculateTotalWarning(List<AggregateStat> stats) {
+        return stats.stream()
+                .mapToInt(AggregateStat::getTotalWarningCount)
+                .sum();
+    }
+
+    /**
+     * 전주 대비 이번 주의 유지율 변화율(%)을 계산합니다.
+     */
+    private Double calculateRatioChange(Double currentAvg, List<AggregateStat> previousStats) {
+        Double previousAvg = calculateAverageRatio(previousStats);
+
+        if (previousAvg == 0.0) {
+            return currentAvg > 0.0 ? 100.0 : 0.0; // 이전 주 통계가 없는데 이번 주 통계가 있으면 100% 증가로 간주
+        }
+
+        // (이번 주 평균 - 지난 주 평균) / 지난 주 평균 * 100
+        double change = ((currentAvg - previousAvg) / previousAvg) * 100.0;
+
+        // 소수점 둘째 자리까지 반올림
+        return Math.round(change * 100.0) / 100.0;
+    }
 
     /**
      * 주간 통계를 합산하여 자세 유형별 총 발생 횟수를 계산합니다.
