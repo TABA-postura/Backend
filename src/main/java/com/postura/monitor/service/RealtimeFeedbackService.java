@@ -28,25 +28,52 @@ public class RealtimeFeedbackService {
     // -> 오래된 데이터를 Redis에서 자동으로 제거하여 메모리 리소스 확보
     private static final long CACHE_EXPIRATION_MINUTES = 10;
 
+    // Redis Hash Field Key 정의
+    private static final String FIELD_LATEST_STATES = "states";
+    private static final String FIELD_TIMESTAMP = "timestamp";
+
+    // 누적 통계를 위한 필드
+    private static final String FIELD_GOOD_COUNT = "good_count";
+    private static final String FIELD_WARNING_COUNT = "warning_count";
+    private static final String FIELD_TOTAL_COUNT = "total_count";
+
     /**
-     * FastAPI 로그 수신 후, 최신 자세 상태를 Redis Hash 구조에 저장
+     * FastAPI 로그 수신 후, 최신 자세 상태와 누적 통계 카운트를 Redis에 저장/갱신합니다.
+     * 이 메서드는 PostureLogService에 의해 비동기로 호출됩니다.
      * @param userId 사용자 ID
-     * @param postureStates 현재 자세 상태
+     * @param postureStates 현재 감지된 자세 상태 목록
      */
     public void updatePostureCache(Long userId, List<String> postureStates) {
         try {
             String redisKey = FEEDBACK_KEY_PREFIX + userId;
 
-            // List<String>을 단일 String으로 변환 (직렬화)
+            // 1. 누적 카운트 계산
+            long goodCount = postureStates.stream().filter("Good"::equalsIgnoreCase).count();
+            // "Good"이 아닌 모든 상태를 경고로 간주 (UNKNOWN 제외)
+            long warningCount = postureStates.stream()
+                    .filter(s -> !"Good".equalsIgnoreCase(s) && !"UNKNOWN".equalsIgnoreCase(s))
+                    .count();
+
+            // 2. 누적 카운트 갱신 (Atomic Increment)
+            if (goodCount > 0) {
+                redisTemplate.opsForHash().increment(redisKey, FIELD_GOOD_COUNT, goodCount);
+            }
+            if (warningCount > 0) {
+                redisTemplate.opsForHash().increment(redisKey, FIELD_WARNING_COUNT, warningCount);
+            }
+            // 전체 로그 횟수 (1초에 1회 가정)
+            redisTemplate.opsForHash().increment(redisKey, FIELD_TOTAL_COUNT, 1);
+
+
+            // 3. 최신 상태 정보 저장
             String statesString = String.join(STATE_DELIMITER, postureStates);
+            Map<String, String> latestData = new HashMap<>();
+            latestData.put(FIELD_LATEST_STATES, statesString);
+            latestData.put(FIELD_TIMESTAMP, LocalDateTime.now().toString());
 
-            // Hash 구조에 저장할 데이터 구성
-            Map<String, String> data = new HashMap<>();
-            data.put("states", statesString);
-            data.put("timestamp", LocalDateTime.now().toString());
+            redisTemplate.opsForHash().putAll(redisKey, latestData);
 
-            // Redis에 데이터 저장 및 만료 시간 설정
-            redisTemplate.opsForHash().putAll(redisKey, data);
+            // 만료 시간 설정
             redisTemplate.expire(redisKey, CACHE_EXPIRATION_MINUTES, TimeUnit.MINUTES);
 
         } catch (Exception e) {
@@ -65,41 +92,82 @@ public class RealtimeFeedbackService {
     public RealtimeFeedbackResponse getRealtimeFeedback(Long userId) {
         String redisKey = FEEDBACK_KEY_PREFIX + userId;
 
-        // Redis에서 Hash 데이터 조회
+        // 1. Redis에서 Hash 데이터 전체 조회 (Map으로 받는 것이 안전함)
         Map<Object, Object> cachedData = redisTemplate.opsForHash().entries(redisKey);
 
-        if (cachedData.isEmpty() || !cachedData.containsKey("state")) {
-            // 데이터가 없거나 유효하지 않은 경우
+        // 2. 초기 데이터 없음 처리
+        if (cachedData.isEmpty()) {
             return RealtimeFeedbackResponse.builder()
                     .currentPostureStates(Collections.singletonList("UNKNOWN"))
                     .feedbackMessages(Collections.singletonList("모니터링 데이터를 기다리는 중입니다."))
                     .currentTime(LocalDateTime.now().toString())
+                    .correctPostureRatio(0.0)
+                    .totalWarningCount(0)
                     .build();
         }
-        String statesString = (String) cachedData.get("states");
-        String currentTime = (String) cachedData.getOrDefault("timestamp", LocalDateTime.now().toString());
 
-        // Redis 문자열을 List<String>으로 복원 (역직렬화)
-        List<String> postureStates;
-        if (statesString == null || statesString.isEmpty()) {
-            postureStates = Collections.singletonList("UNKNOWN");
-        } else {
-            postureStates = Arrays.stream(statesString.split(STATE_DELIMITER))
-                    .filter(s -> !s.trim().isEmpty())
-                    .map(String::trim)
-                    .collect(Collectors.toList());
-        }
+        // 3. 데이터 추출
+        String statesString = (String) cachedData.getOrDefault(FIELD_LATEST_STATES, "");
+        String currentTime = (String) cachedData.getOrDefault(FIELD_TIMESTAMP, LocalDateTime.now().toString());
 
-        // 복수 상태에 대한 피드백 메시지 목록 생성
+        // 4. 누적 통계 값 안전하게 파싱
+        long goodCount = safeParseLong(cachedData.get(FIELD_GOOD_COUNT));
+        long warningCount = safeParseLong(cachedData.get(FIELD_WARNING_COUNT));
+        long totalCount = safeParseLong(cachedData.get(FIELD_TOTAL_COUNT));
+
+        // 5. 자세 상태 및 메시지 목록 생성 (기존 로직 유지)
+        List<String> postureStates = getPostureStatesList(statesString);
         List<String> feedbackMessages = postureStates.stream()
                 .map(this::getSingleFeedbackMessage)
                 .collect(Collectors.toList());
 
+        // 6. 유지율 및 경고 횟수 계산
+        Integer totalWarningCount = (int) warningCount; // 이미 누적된 경고 횟수 사용
+        Double correctPostureRatio = 0.0;
+
+        if (totalCount > 0) {
+            // 유지율 계산: (바른 자세 횟수 / 전체 로그 횟수) * 100 -> 소수점 첫째 자리까지 반올림
+            correctPostureRatio = Math.round(((double) goodCount / totalCount) * 100.0 * 10.0) / 10.0;
+        }
+
+        // 7. DTO 빌드
         return RealtimeFeedbackResponse.builder()
                 .currentPostureStates(postureStates)
                 .feedbackMessages(feedbackMessages)
                 .currentTime(currentTime)
+                .correctPostureRatio(correctPostureRatio)
+                .totalWarningCount(totalWarningCount)
                 .build();
+    }
+
+    // *************************************************************
+    // 3. 헬퍼 메서드
+    // *************************************************************
+
+    /**
+     * Redis에서 가져온 Object 값을 안전하게 long 타입으로 파싱합니다.
+     */
+    private long safeParseLong(Object obj) {
+        if (obj == null) return 0L;
+        try {
+            return Long.parseLong(obj.toString());
+        } catch (NumberFormatException e) {
+            log.warn("NumberFormatException during parsing Redis value: {}", obj);
+            return 0L;
+        }
+    }
+
+    /**
+     * List<String> 문자열을 복원합니다.
+     */
+    private List<String> getPostureStatesList(String statesString) {
+        if (statesString == null || statesString.isEmpty()) {
+            return Collections.singletonList("UNKNOWN");
+        }
+        return Arrays.stream(statesString.split(STATE_DELIMITER))
+                .filter(s -> !s.trim().isEmpty())
+                .map(String::trim)
+                .collect(Collectors.toList());
     }
 
     /**
