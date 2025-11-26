@@ -47,7 +47,8 @@ public class User extends BaseTimeEntity {
      * 객체 생성을 가능하게 합니다.
      */
     @Builder
-    public User(String email, String passwordHash, String name, Role role, LocalTime startTime, LocalTime endtime) {
+    public User(Long id, String email, String passwordHash, String name, Role role, LocalTime startTime, LocalTime endtime) {
+        this.id = id; // ** 추가
         this.email = email;
         this.passwordHash = passwordHash;
         this.name = name;

@@ -97,6 +97,9 @@ public class JwtTokenProvider {
                 .parseClaimsJws(token)
                 .getBody();
 
+        // ** 추가: 클레임에서 userId 추출
+        Long userIdFromToken = claims.get("userId", Long.class);
+
         // 2. 권한 정보 가져오기
         Collection<? extends GrantedAuthority> authorities =
                 Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(","))
@@ -108,6 +111,7 @@ public class JwtTokenProvider {
         CustomUserDetails principal = new CustomUserDetails(
                 // 임시 User 객체 생성 (실제 DB 조회 아님)
                 com.postura.user.entity.User.builder()
+                        .id(userIdFromToken) //
                         .email(claims.getSubject())
                         .passwordHash("") // 비밀번호는 토큰에 없으므로 빈 값
                         .name("N/A")
