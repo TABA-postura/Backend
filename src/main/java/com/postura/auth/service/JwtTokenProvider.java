@@ -58,6 +58,11 @@ public class JwtTokenProvider {
         Date accessExpiration = new Date(now + accessTokenValidityInMilliseconds);
         Date refreshExpiration = new Date(now + refreshTokenValidityInMilliseconds);
 
+        // ** 추가: CustomUserDetails에서 userId 추출
+        // CustomUserDetailsService를 통해 load된 Principal은 CustomUserDetails입니다.
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        Long userId = userDetails.getUserId();
+
         // 3. Access Token 생성 (사용자 ID와 권한 포함)
         String accessToken = Jwts.builder()
                 .setSubject(authentication.getName()) // 토큰의 주체 (여기서는 email/Username)
