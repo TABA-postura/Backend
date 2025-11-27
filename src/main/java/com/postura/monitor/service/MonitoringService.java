@@ -151,7 +151,7 @@ public class MonitoringService {
      * @return MonitoringSession
      */
     private MonitoringSession getSession (Long sessionId, Long userId) {
-        return sessionRepository.findByIdandUserId(sessionId, userId)
+        return sessionRepository.findByIdAndUserId(sessionId, userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.SESSION_NOT_FOUND));
     }
 
