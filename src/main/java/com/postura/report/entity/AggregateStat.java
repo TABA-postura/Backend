@@ -30,7 +30,7 @@ public class AggregateStat {
     private LocalDate statDate; // -> 그래프에 사용
 
     // 3. 통계 지표
-    @Column(name = "correct_ratio", precision = 5, scale = 2, nullable = false)
+    @Column(name = "correct_ratio", columnDefinition = "DECIMAL(5, 2)", nullable = false)
     private Double correctRatio; // 바른 자세 유지율 (%) -> 이번 주 평균 유지율, 자세 분석 그래프
 
     @Column(name = "total_warning_count", nullable = false)
