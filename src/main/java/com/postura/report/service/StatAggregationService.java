@@ -37,9 +37,10 @@ public class StatAggregationService {
     // 1. 메인 배치 실행 메서드
     // *************************************************************
     @Scheduled(cron = "0 0 3 * * *")
-    public void runDailyAggregation(LocalDate targetDate) {
+    public void runDailyAggregation() {
 
-        log.info("Starting daily aggregation for date: {}", targetDate);
+        LocalDate targetDate = LocalDate.now().minusDays(1);
+        log.info("Starting daily aggregation for target date: {}", targetDate);
 
         // 실제로는 페이징 처리 등을 하지만, 데모를 위해 모든 사용자 조회
         List<User> allUsers = userRepository.findAll();
