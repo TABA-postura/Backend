@@ -51,7 +51,7 @@ public class PostureLogService {
             log.debug("DB Saved: Warning log recorded for SessionId {}", request.getSessionId());
         } else {
             // 정상 자세일 경우 DB 저장 skip
-            log.trace("DB Skip: Only 'Good' posture received for SessionId {}", request.getSessionId())
+            log.trace("DB Skip: Only 'Good' posture received for SessionId {}", request.getSessionId());
         }
 
         // 4. 실시간 피드백 업데이트 (Redis)
