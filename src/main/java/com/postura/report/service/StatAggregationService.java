@@ -2,6 +2,8 @@ package com.postura.report.service;
 
 import com.postura.ai.entity.PostureLog;
 import com.postura.ai.repository.PostureLogRepository;
+import com.postura.monitor.entity.MonitoringSession;
+import com.postura.monitor.entity.SessionStatus;
 import com.postura.monitor.repository.MonitoringSessionRepository;
 import com.postura.report.entity.AggregateStat;
 import com.postura.report.repository.AggregateStatRepository;
@@ -63,40 +65,51 @@ public class StatAggregationService {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
 
-        // 1. 해당 날짜에 저장된 모든 자세 로그 조회
-        List<PostureLog> logs = postureLogRepository.findAllByUserIdAndTimestampBetweenOrderByTimestampAsc(userId, start, end);
+        // 1. 해당 날짜에 완료된 모든 MonitoringSession 조회
+        List<MonitoringSession> sessions = sessionRepository.findAllByUserIdAndStartAtBetween(userId, start, end);
 
-        if (logs.isEmpty()) {
+        // 2. 해당 날짜에 저장된 비정상 자세 로그 조회 -> 자세 유형별 카운트 계산
+        List<PostureLog> warningLogs = postureLogRepository.findAllByUserIdAndTimestampBetweenOrderByTimestampAsc(userId, start, end);
+
+        if (warningLogs.isEmpty()) {
             log.debug("No posture logs found for user {} on {}.", userId, date);
             return;
         }
 
-        // 2. 집계 변수 초기화
+        // 3. 집계 변수 초기화
         long totalGoodTime = 0;
         long totalAnalysisSeconds = 0;
         int totalWarningCount = 0;
         Map<String, Integer> postureCount = initializePostureCountMap(); // 7가지 자세 카운트를 위한 맵
 
-        // 3. 로그 순회 및 지표 계산
-        for (PostureLog log : logs) {
-            // 모든 로그는 1초 간격으로 들어왔다고 가정하고 처리
-            long duration = 1;
-            totalAnalysisSeconds += duration;
+        // 4. 유지율 계산을 위한 Final 카운트 합산 (Monitoring Session 합산)
+        for (MonitoringSession session : sessions) {
+            // 완료된 세션만 최종 통계에 반영
+            if (session.getStatus() == SessionStatus.COMPLETED && session.getFinalTotalCount() != null) {
+                totalGoodTime += session.getFinalGoodCount();
+                totalAnalysisSeconds += session.getFinalTotalCount();
+            }
+        }
 
+        if (totalAnalysisSeconds == 0) {
+            log.debug("Total analysis time is zero for user {} on {}. Skipping stat.", userId, date);
+            return;
+        }
+
+        // 5. 자세 유형별 카운트 합산 (DB 로그 순회)
+        for (PostureLog log : warningLogs) {
             for (String state : log.getPostureStates()) {
-                if ("Good".equalsIgnoreCase(state)) {
-                    totalGoodTime += duration;
-                } else if (!"UNKNOWN".equalsIgnoreCase(state)) {
-                    totalWarningCount += 1; // 경고 횟수 증가
-                    postureCount.merge(state, 1, Integer::sum); // 자세 유형별 카운트 증가
+                if (!"Good".equalsIgnoreCase(state) && !"UNKNOWN".equalsIgnoreCase(state)) {
+                    totalWarningCount += 1;
+                    postureCount.merge(state, 1, Integer::sum);
                 }
             }
         }
 
-        // 4. 유지율 계산 (세션 효율성 유지율)
+        // 6. 유지율 계산 (세션 효율성 유지율)
         double maintenanceRatio = calculateMaintenanceRatio(totalGoodTime, totalAnalysisSeconds);
 
-        // 5. 목표 달성 및 연속 달성일수 계산
+        // 7. 목표 달성 및 연속 달성일수 계산
         boolean goalAchieved = maintenanceRatio >= GOAL_RATIO;
         Optional<AggregateStat> existingStatOpt = aggregateStatRepository.findByUserIdAndStatDate(userId, date);
         int consecutiveDays = calculateConsecutiveAchievement(userId, date, goalAchieved);
@@ -107,7 +120,6 @@ public class StatAggregationService {
         if (existingStatOpt.isPresent()) {
             // [UPDATE] - 이미 통계가 존재함: 기존 엔티티를 가져와 필드를 갱신
             stat = existingStatOpt.get();
-
             stat.updateStats(
                     maintenanceRatio, totalWarningCount, totalAnalysisSeconds,
                     goalAchieved, consecutiveDays, postureCount
