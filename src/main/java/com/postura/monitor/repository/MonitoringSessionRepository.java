@@ -16,5 +16,5 @@ public interface MonitoringSessionRepository extends JpaRepository<MonitoringSes
      */
     Optional<MonitoringSession> findByIdAndUserId(Long sessionId, Long userId);
 
-    List<MonitoringSession> findAllByUserAndStartAtBetween(Long userId, LocalDateTime start, LocalDateTime end);
+    List<MonitoringSession> findAllByUserIdAndStartAtBetween(Long userId, LocalDateTime start, LocalDateTime end);
 }
