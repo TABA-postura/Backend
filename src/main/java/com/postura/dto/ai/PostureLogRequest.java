@@ -28,7 +28,4 @@ public class PostureLogRequest {
     @NotNull
     private LocalDateTime timestamp;
 
-    // 상세 분석, 디버깅, AI 재학습 등을 위한 보조데이터 (NotNull 안붙임)
-    // 전략 : JSON 문자열 형태로 전송받아 DB에는 TEXT로 저장
-    private String landmarkData;
 }

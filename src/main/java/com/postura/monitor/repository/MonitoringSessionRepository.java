@@ -4,6 +4,8 @@ import com.postura.monitor.entity.MonitoringSession;
 import com.postura.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface MonitoringSessionRepository extends JpaRepository<MonitoringSession, Long> {
@@ -14,5 +16,5 @@ public interface MonitoringSessionRepository extends JpaRepository<MonitoringSes
      */
     Optional<MonitoringSession> findByIdAndUserId(Long sessionId, Long userId);
 
-    Long user(User user);
+    List<MonitoringSession> findAllByUserIdAndStartAtBetween(Long userId, LocalDateTime start, LocalDateTime end);
 }

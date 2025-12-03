@@ -10,11 +10,13 @@ import com.postura.user.entity.User;
 import com.postura.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PostureLogService {
 
     private final PostureLogRepository postureLogRepository;
@@ -37,11 +39,20 @@ public class PostureLogService {
         MonitoringSession session = sessionRepository.findById(request.getSessionId())
                 .orElseThrow(() -> new IllegalArgumentException("Session not found: " + request.getSessionId()));
 
-        // 2. DTO -> Entity 변환
-        PostureLog newLog = PostureLog.from(request, user, session);
+        // 2. DB 저장 조건 검사: "Good"이나 "UNKNOWN"이 아닌 자세가 하나라도 있는지 검사
+        boolean hasWarningPosture = request.getPostureStates().stream()
+                .anyMatch(state -> !state.equalsIgnoreCase("Good") && !state.equalsIgnoreCase("UNKNOWN"));
 
-        // 3. 영구 저장 (RDS)
-        postureLogRepository.save(newLog);
+        // 3. 영구 저장 (RDS) - 조건부 실행
+        if (hasWarningPosture) {
+            // DB 부하 절감을 위해 비정상 자세일 경우에만 저장
+            PostureLog newLog = PostureLog.from(request, user, session);
+            postureLogRepository.save(newLog);
+            log.debug("DB Saved: Warning log recorded for SessionId {}", request.getSessionId());
+        } else {
+            // 정상 자세일 경우 DB 저장 skip
+            log.trace("DB Skip: Only 'Good' posture received for SessionId {}", request.getSessionId());
+        }
 
         // 4. 실시간 피드백 업데이트 (Redis)
         // 최신 자세 상태를 Redis에 캐시하도록 monitor 모듈에 위임

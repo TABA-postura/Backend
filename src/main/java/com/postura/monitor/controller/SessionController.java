@@ -111,7 +111,7 @@ public class SessionController {
         // sessionId를 직접 전달
         monitoringService.completeSession(request.getSessionId(), userId);
 
-        // DB 상태 변경 완료 후 응답, React는 이 응답을 받고 AI reset 플래그와 함께 이미지 전송을 재개
+        // DB 상태 변경 완료 후 응답, React는 이 응답을 받고 AI reset 플래그와 함께 이미지 전송을 중지
         return new ResponseEntity<>(HttpStatus.OK);
     }
 }

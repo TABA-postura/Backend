@@ -29,16 +29,13 @@ public class PostureLog {
     @JoinColumn(name = "session_id", nullable = false)
     private MonitoringSession session;
 
+    // report 모듈에서 통계를 정확하게 집계하는 유일한 시간 기준
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
 
     @Convert(converter = StringListConverter.class)
     @Column(name = "posture_states", columnDefinition = "TEXT", nullable = false)
     private List<String> postureStates;
-
-    @Lob
-    @Column(name = "landmark_data")
-    private String landmarkData;
 
     /**
      * DTO에서 Entity로 변환 (Service 계층에서 사용)
@@ -54,7 +51,6 @@ public class PostureLog {
                 .session(session)
                 .postureStates(request.getPostureStates())
                 .timestamp(request.getTimestamp())
-                .landmarkData(request.getLandmarkData())
                 .build();
     }
 }

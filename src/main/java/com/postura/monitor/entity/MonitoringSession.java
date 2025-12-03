@@ -44,6 +44,18 @@ public class MonitoringSession {
     @Column(name = "accumulated_duration_seconds", nullable =  false)
     private Long accumulatedDurationSeconds;
 
+    // *************************************************************
+    // 추가 필드: Redis에서 읽어와 RDB에 영구 저장할 최종 카운터
+    // *************************************************************
+
+    @Column(name = "final_good_count")
+    private Long finalGoodCount; // 최종 확정된 바른 자세 총 횟수 (유지율 분자)
+
+    @Column(name = "final_total_count")
+    private Long finalTotalCount; // 최종 확정된 총 로그 횟수 (유지율 분모)
+
+    @Column(name = "final_warning_count")
+    private Integer finalWarningCount; // 최종 확정된 총 경고 횟수
 
     // *********** 비즈니스 메서드 **************
     /**
@@ -71,10 +83,14 @@ public class MonitoringSession {
     /**
      * 세션을 COMPLETED 상태로 변경하고 최종 종료 시각 기록
      */
-    public void complete(long finalDurationSeconds) {
+    public void complete(long finalDurationSeconds, Long finalGoodCount, Long finalTotalCount, Integer finalWarningCount) {
         // 최종 누적 시간에 마지막 Running 시간을 더하여 총 분석 시간 확정
         this.accumulatedDurationSeconds += finalDurationSeconds;
         this.status = SessionStatus.COMPLETED;
         this.endAt = LocalDateTime.now();
+
+        this.finalGoodCount = finalGoodCount;
+        this.finalTotalCount = finalTotalCount;
+        this.finalWarningCount = finalWarningCount;
     }
 }

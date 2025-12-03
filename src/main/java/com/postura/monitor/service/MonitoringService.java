@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +49,9 @@ public class MonitoringService {
                 .status(SessionStatus.STARTED)
                 .startAt(LocalDateTime.now())
                 .accumulatedDurationSeconds(0L)
+                .finalGoodCount(null)
+                .finalTotalCount(null)
+                .finalWarningCount(null)
                 .build();
         session =  sessionRepository.save(session);
 
@@ -119,26 +123,35 @@ public class MonitoringService {
 
         // 1. 최종 진행 시간 계산
         long lastRunningDuration = 0;
-        if (session.getStatus() == SessionStatus.STARTED) {
-            lastRunningDuration = calculateRunningDuration(session);
+        if (session.getStatus() == SessionStatus.STARTED || session.getStatus() == SessionStatus.PAUSED) {
+            if (session.getStatus() == SessionStatus.STARTED) {
+                lastRunningDuration = calculateRunningDuration(session);
+            }
+            // 2. Redis에서 최종 카운트 조회
+            Map<String, Long> finalCounts = realtimeFeedbackService.getFinalSessionCounts(userId);
+            Long finalGood = finalCounts.getOrDefault("finalGoodCount", 0L);
+            Long finalTotal = finalCounts.getOrDefault("finalTotalCount", 0L);
+            Integer finalWarning = finalCounts.getOrDefault("finalWarningCount", 0L).intValue();
+
+            // 3. Entity 최종 업데이트 및 DB 저장 (COMPLETED 상태로 변경)
+            session.complete(lastRunningDuration, finalGood, finalTotal, finalWarning);
+            sessionRepository.save(session);
+
+            // 4. Redis 캐시 정리 - 세션 완료 후 캐시를 삭제하여 데이터 유출 방지
+            realtimeFeedbackService.clearUserCache(userId);
+
+            // 5. 오늘 날짜 통계 즉시 업데이트 로직
+            try {
+                LocalDate today = LocalDate.now();
+                // 해당 사용자의 오늘 통계만 즉시 재계산 및 업데이트 (UPSERT)
+                statAggregationService.aggregateStatsForUser(userId, today);
+                log.info("On-demand stats update complete for user {} on {}.", userId, today);
+            } catch (Exception e) {
+                // 통계 집계 실패는 세션 종료 자체를 막아서는 안 됨 (로그만 남김)
+                log.error("Failed to run on-demand aggregation after session completion: {}", e.getMessage());
+            }
         }
-
-        // 2. Entity 최종 업데이트 및 DB 저장 (COMPLETED 상태로 변경)
-        session.complete(lastRunningDuration);
-        sessionRepository.save(session);
-
-        // 3. 오늘 날짜 통계 즉시 업데이트 로직
-        try {
-            LocalDate today = LocalDate.now();
-            // 해당 사용자의 오늘 통계만 즉시 재계산 및 업데이트 (UPSERT)
-            statAggregationService.aggregateStatsForUser(userId, today);
-            log.info("On-demand stats update complete for user {} on {}.", userId, today);
-        } catch (Exception e) {
-            // 통계 집계 실패는 세션 종료 자체를 막아서는 안 됨 (로그만 남김)
-            log.error("Failed to run on-demand aggregation after session completion: {}", e.getMessage());
-        }
-
-        // 4. React가 성공 응답 받은 후 이미지 전송 멈춤
+        // 6. React가 성공 응답 받은 후 이미지 전송 멈춤
         log.info("Session COMPLETED: SessionId={}. Total Duration: {}", sessionId, session.getAccumulatedDurationSeconds());
     }
 

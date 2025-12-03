@@ -57,6 +57,33 @@ public class RealtimeFeedbackService {
     );
 
     /**
+     * 세션 종료 시점에 Redis에 누적된 최종 카운트를 Map 형태로 조회
+     * @param userId 사용자 ID
+     * @return finalGoodCount, finalTotalCount, finalWarningCount를 포함한 Map
+     */
+    public Map<String, Long> getFinalSessionCounts(Long userId) {
+        String rediskey = FEEDBACK_KEY_PREFIX + userId;
+
+        // 조회할 필드 목록
+        List<Object> countFields = Arrays.asList(
+                FIELD_GOOD_COUNT, FIELD_TOTAL_COUNT, FIELD_WARNING_COUNT
+        );
+
+        // Redis에서 데이터 조회
+        List<Object> counts = redisTemplate.opsForHash().multiGet(rediskey, countFields);
+
+        // 안전하게 파싱하여 Map 구성
+        Map<String, Long> finalCounts = new HashMap<>();
+
+        // goodCount, totalCount, warningCount 순서대로 파싱
+        finalCounts.put("finalGoodCount", safeParseLong(counts.get(0)));
+        finalCounts.put("finalTotalCount", safeParseLong(counts.get(1)));
+        finalCounts.put("finalWarningCount", safeParseLong(counts.get(2)));
+
+        return finalCounts;
+    }
+    
+    /**
      * FastAPI 로그 수신 후, 최신 자세 상태와 누적 통계 카운트를 Redis에 저장/갱신합니다.
      * 이 메서드는 PostureLogService에 의해 비동기로 호출됩니다.
      * @param userId 사용자 ID
@@ -76,7 +103,7 @@ public class RealtimeFeedbackService {
             // 전체 로그 횟수 증가
             redisTemplate.opsForHash().increment(redisKey, FIELD_TOTAL_COUNT, 1);
 
-            // 💡 7가지 자세 유형별 누적 카운트 및 총 경고 횟수 증가
+            // 7가지 자세 유형별 누적 카운트 및 총 경고 횟수 증가
             for (String state : postureStates) {
                 String field = POSTURE_FIELD_MAP.get(state);
                 if (field != null) {
