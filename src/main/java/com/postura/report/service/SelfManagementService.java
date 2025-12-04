@@ -54,7 +54,7 @@ public class SelfManagementService {
 
         // 3. 데이터 가공 및 분석
         Map<String, Integer> distribution = calculatePostureDistribution(weeklyStats);
-        String mostFrequentIssue = findMostFrequentIssue(distribution);
+        List<String> top3FrequentIssues = findTop3FrequentIssues(distribution); // 가장 빈번한 불량 자세 top3
 
         // 4. 추가 지표 계산
         Double weeklyAvgRatio = calculateAverageRatio(weeklyStats);
@@ -75,14 +75,14 @@ public class SelfManagementService {
                 .weeklyAvgRatio(weeklyAvgRatio)
                 .currentTotalWarning(latestStat.getTotalWarningCount())
                 .currentConsecutiveAchievedDays(latestStat.getConsecutiveAchievedDays())
-                .mostFrequentIssue(mostFrequentIssue)
+                .mostFrequentIssue(top3FrequentIssues.isEmpty() ? "Good" : top3FrequentIssues.get(0))
 
                 .weeklyTotalWarning(weeklyTotalWarning) // 주간 합산 경고 횟수
                 .ratioChangeVsPreviousWeek(ratioChangeVsPreviousWeek) // 전주 대비 변화율
 
                 // 분포 및 추천
                 .postureDistribution(distribution)
-                .recommendations(generateRecommendations(mostFrequentIssue))
+                .recommendations(generateRecommendationsForTopIssues(top3FrequentIssues))
                 .build();
     }
 
@@ -168,42 +168,41 @@ public class SelfManagementService {
     /**
      * 가장 빈번하게 발생한 자세 불량 유형을 찾습니다.
      */
-    private String findMostFrequentIssue(Map<String, Integer> distribution) {
-        // Map이 비어있다면 Good으로 간주
-        if (distribution.isEmpty()) {
-            return "Good";
-        }
+    private List<String> findTop3FrequentIssues(Map<String, Integer> distribution) {
+        // "Good"이나 발생 횟수 0인 항목은 제외하고 내림차순 정렬 후 상위 3개만 추출
         return distribution.entrySet().stream()
-                .max(Comparator.comparing(Map.Entry::getValue))
+                .filter(entry -> !entry.getKey().equalsIgnoreCase("Good") && entry.getValue() > 0)
+                .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
+                .limit(3)
                 .map(Map.Entry::getKey)
-                .orElse("Good");
+                .collect(Collectors.toList());
     }
 
     /**
      * 가장 빈번한 자세 불량 유형을 기반으로 ContentService를 호출하여 스트레칭을 추천합니다.
      */
-    private List<RecommendationDto> generateRecommendations(String problemType) {
+    private List<RecommendationDto> generateRecommendationsForTopIssues(List<String> top3ProblemTypes) {
+        List<RecommendationDto> recommendations = new ArrayList<>();
+        Random random = new Random();
 
-        // 문제가 없으면 추천 목록도 비워둡니다.
-        if ("Good".equals(problemType) || "UNKNOWN".equals(problemType)) {
-            return Collections.emptyList();
+        for (String problemType : top3ProblemTypes) {
+            // 1. ContentService를 호출하여 해당 문제 유형과 관련된 모든 가이드 목록을 조회
+            List<Content> guides = contentService.getGuidesByProblemType(problemType);
+
+            if (guides.isEmpty()) {
+                continue; // 가이드가 없으면 다음 문제 유형으로 이동
+            }
+
+            // 2. 무작위로 스트레칭 가이드 1개 선택
+            Content randomGuide = guides.get(random.nextInt(guides.size()));
+
+            // 3. RecommendationDto로 변환하여 목록에 추가
+            recommendations.add(RecommendationDto.builder()
+                    .problemType(problemType)
+                    .recommendedGuideTitle(randomGuide.getTitle())
+                    .guideId(randomGuide.getGuideId())
+                    .build());
         }
-
-        // 1. ContentService를 호출하여 해당 문제 유형에 맞는 가이드 목록 조회
-        List<Content> guides = contentService.getGuidesByProblemType(problemType);
-
-        if (guides.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // 2. Content 엔티티를 RecommendationDto로 변환
-        return guides.stream()
-                .map(guide -> RecommendationDto.builder()
-                        .problemType(problemType)
-                        .recommendedGuideTitle(guide.getTitle())
-                        .guideId(guide.getGuideId())
-                        .build())
-                .collect(Collectors.toList());
+        return recommendations;
     }
-
 }
