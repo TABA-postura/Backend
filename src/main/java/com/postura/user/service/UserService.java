@@ -24,7 +24,7 @@ public class UserService {
      * @return 저장된 User 엔티티
      */
     @Transactional
-    public User SignUp(SignUpRequest request) {
+    public User signUp(SignUpRequest request) {
 
         // 1. 중복 이메일 체크
         if (userRepository.existsByEmail(request.getEmail())) {

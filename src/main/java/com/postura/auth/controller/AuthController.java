@@ -2,6 +2,7 @@ package com.postura.auth.controller;
 
 import com.postura.auth.service.AuthService;
 import com.postura.dto.auth.LoginRequest;
+import com.postura.dto.auth.RefreshTokenRequest;
 import com.postura.dto.auth.SignUpRequest;
 import com.postura.dto.auth.TokenResponse;
 import com.postura.user.service.UserService;
@@ -16,34 +17,45 @@ import jakarta.validation.Valid;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final UserService userService; // 회원가입 처리 (UserService에 로직 위임)
-    private final AuthService authService; // 로그인/토큰 처리 (AuthService에 로직 위임)
+    private final UserService userService;
+    private final AuthService authService;
 
     /**
      * POST /api/auth/signup : 회원가입 API
-     * @param request 이메일, 비밀번호, 이름
      */
     @PostMapping("/signup")
     public ResponseEntity<String> signUp(@RequestBody @Valid SignUpRequest request) {
-        // 비즈니스 로직은 UserService에 위임
-        userService.SignUp(request);
+        userService.signUp(request);
         return ResponseEntity.ok("회원가입이 성공적으로 완료되었습니다.");
     }
 
     /**
      * POST /api/auth/login : 로그인 API
-     * @param request 이메일, 비밀번호
-     * @return Access Token과 Refresh Token
      */
     @PostMapping("/login")
     public ResponseEntity<TokenResponse> login(@RequestBody @Valid LoginRequest request) {
-        // 인증 및 토큰 발급 로직은 AuthService에 위임
         TokenResponse response = authService.login(request);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * TODO: POST /api/auth/reissue : 토큰 재발급 API 구현 예정
-     * 클라이언트로부터 Refresh Token을 받아 새로운 Access Token을 발급합니다.
+     * POST /api/auth/reissue : 토큰 재발급 API
      */
+    @PostMapping("/reissue")
+    public ResponseEntity<TokenResponse> reissue(@RequestBody @Valid RefreshTokenRequest request) {
+        TokenResponse response = authService.reissue(request.getRefreshToken());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * POST /api/auth/logout : 로그아웃 API
+     * - AccessToken을 받아서 토큰 블랙리스트 또는 RefreshToken 폐기
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(
+            @RequestHeader("Authorization") String authorizationHeader
+    ) {
+        authService.logout(authorizationHeader);
+        return ResponseEntity.ok("로그아웃이 완료되었습니다.");
+    }
 }
