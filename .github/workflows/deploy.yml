@@ -1,0 +1,38 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main  # main 브랜치에 푸시될 때마다 배포
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # 2. AWS EC2에 접근하기 위한 SSH 키 설정
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}  # 비밀 키 설정
+
+      # 3. EC2로 애플리케이션 파일 복사
+      - name: Copy files to EC2
+        run: |
+          scp -r ./ ec2-user@13.239.176.67:/home/ec2-user  # EC2의 /home/ec2-user 경로로 복사
+
+      # 4. EC2에서 배포
+      - name: SSH into EC2 and deploy
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 << 'EOF'
+            cd /home/ec2-user
+            # Dockerfile을 사용하여 Docker 이미지를 빌드하고 컨테이너를 실행합니다.
+            docker build -t my-app .
+            docker stop my-app || true  # 기존 컨테이너 종료 (없으면 무시)
+            docker rm my-app || true    # 기존 컨테이너 제거 (없으면 무시)
+            docker run -d --name my-app my-app  # 새 컨테이너 시작
+          EOF
