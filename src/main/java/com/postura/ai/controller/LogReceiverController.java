@@ -22,14 +22,14 @@ import org.springframework.web.bind.annotation.RestController;
  */
 
 @RestController
-@RequestMapping("/ai")
+@RequestMapping("/api/ai")
 @RequiredArgsConstructor
 public class LogReceiverController {
 
     private final PostureLogService postureLogService;
 
     /**
-     * [엔드포인트] : POST /ai/log
+     * [엔드포인트] : POST /api/ai/log
      * FastAPI로 부터 실시간 자세 로그를 수신
      * @param request (PostureLogRequest)
      * @return 202 Accepted (비동기 처리 후 즉시 응답)
