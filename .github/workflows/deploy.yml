@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Build, Push Docker Image, and Deploy to EC2
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main  # main 브랜치에 푸시될 때마다 배포
 
 jobs:
-  deploy:
+  build_and_deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,18 +14,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      # 2. AWS EC2에 접근하기 위한 SSH 키 설정
+      # 2. Docker 로그인 (Docker Hub)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 3. Docker 이미지 빌드
+      - name: Build Docker image
+        run: |
+          docker build -t yswmon/postura-backend:latest .
+
+      # 4. Docker 이미지 Docker Hub에 푸시
+      - name: Push Docker image to Docker Hub
+        run: |
+          docker push yswmon/postura-backend:latest
+
+      # 5. EC2에 SSH 키 설정
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.5.3
         with:
-          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}  # 비밀 키 설정
+          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
 
-      # 3. EC2로 애플리케이션 파일 복사
-      - name: Copy files to EC2
-        run: |
-          scp -r ./ ec2-user@13.239.176.67:/home/ec2-user  # EC2의 /home/ec2-user 경로로 복사
-
-      # 4. EC2에서 기존 컨테이너 종료 & 삭제
+      # 6. EC2에서 기존 컨테이너 종료 & 삭제
       - name: Stop and remove existing container on EC2
         run: |
           ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 << 'EOF'
@@ -33,14 +45,14 @@ jobs:
             docker rm postura-backend || true
           EOF
 
-      # 5. 최신 Docker 이미지 pull
-      - name: Pull latest Docker image
+      # 7. 최신 Docker 이미지 EC2에서 pull
+      - name: Pull latest Docker image from Docker Hub
         run: |
           ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 << 'EOF'
             docker pull yswmon/postura-backend:latest
           EOF
 
-      # 6. 새로운 컨테이너 실행
+      # 8. 새로운 Docker 컨테이너 실행
       - name: Run Docker container on EC2
         run: |
           ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 "docker run -d -p 8080:8080 --name postura-backend -e SPRING_DATASOURCE_URL='jdbc:mysql://postura-db.cf8cwkeu2kss.ap-southeast-2.rds.amazonaws.com:3306/postura?useSSL=false&serverTimezone=Asia/Seoul' -e SPRING_DATASOURCE_USERNAME='admin' -e SPRING_DATASOURCE_PASSWORD='kangkg8067' -e JWT_SECRET='MySuperSecureKeyForPosturaProject0123456789ABCDEF!@#$' -e SPRING_REDIS_HOST='master.postura.7o1tpz.apse2.cache.amazonaws.com' -e SPRING_REDIS_PORT='6379' yswmon/postura-backend:latest"
