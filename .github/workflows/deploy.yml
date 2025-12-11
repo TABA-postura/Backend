@@ -25,14 +25,22 @@ jobs:
         run: |
           scp -r ./ ec2-user@13.239.176.67:/home/ec2-user  # EC2의 /home/ec2-user 경로로 복사
 
-      # 4. EC2에서 배포
-      - name: SSH into EC2 and deploy
+      # 4. EC2에서 기존 컨테이너 종료 & 삭제
+      - name: Stop and remove existing container on EC2
         run: |
           ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 << 'EOF'
-            cd /home/ec2-user
-            # Dockerfile을 사용하여 Docker 이미지를 빌드하고 컨테이너를 실행합니다.
-            docker build -t my-app .
-            docker stop my-app || true  # 기존 컨테이너 종료 (없으면 무시)
-            docker rm my-app || true    # 기존 컨테이너 제거 (없으면 무시)
-            docker run -d --name my-app my-app  # 새 컨테이너 시작
+            docker stop postura-backend || true
+            docker rm postura-backend || true
           EOF
+
+      # 5. 최신 Docker 이미지 pull
+      - name: Pull latest Docker image
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 << 'EOF'
+            docker pull yswmon/postura-backend:latest
+          EOF
+
+      # 6. 새로운 컨테이너 실행
+      - name: Run Docker container on EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no ec2-user@13.239.176.67 "docker run -d -p 8080:8080 --name postura-backend -e SPRING_DATASOURCE_URL='jdbc:mysql://postura-db.cf8cwkeu2kss.ap-southeast-2.rds.amazonaws.com:3306/postura?useSSL=false&serverTimezone=Asia/Seoul' -e SPRING_DATASOURCE_USERNAME='admin' -e SPRING_DATASOURCE_PASSWORD='kangkg8067' -e JWT_SECRET='MySuperSecureKeyForPosturaProject0123456789ABCDEF!@#$' -e SPRING_REDIS_HOST='master.postura.7o1tpz.apse2.cache.amazonaws.com' -e SPRING_REDIS_PORT='6379' yswmon/postura-backend:latest"
