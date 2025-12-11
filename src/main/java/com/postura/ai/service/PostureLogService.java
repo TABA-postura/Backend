@@ -33,11 +33,16 @@ public class PostureLogService {
     @Transactional
     public void processAndSaveLog (PostureLogRequest request) {
 
-        // 1. DTO에 포함된 ID를 통해 User와 Session 엔티티 조회 -> Fk 연결
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("User not found: " + request.getUserId()));
+        // 1. MonitoringSession을 조회하여 DB에 저장된 안전한 User 객체(FK)를 가져옴
         MonitoringSession session = sessionRepository.findById(request.getSessionId())
-                .orElseThrow(() -> new IllegalArgumentException("Session not found: " + request.getSessionId()));
+                .orElseThrow(() -> {
+                    log.error("Session not found for SessionId: {}", request.getSessionId());
+                    return new IllegalArgumentException("Session not found: " + request.getSessionId());
+                });
+
+        // DB에 저장된 안전한 User 객체(userId)를 가져옵니다.
+        User user = session.getUser();
+        Long safeUserId = user.getId();
 
         // 2. DB 저장 조건 검사: "Good"이나 "UNKNOWN"이 아닌 자세가 하나라도 있는지 검사
         boolean hasWarningPosture = request.getPostureStates().stream()
@@ -57,7 +62,7 @@ public class PostureLogService {
         // 4. 실시간 피드백 업데이트 (Redis)
         // 최신 자세 상태를 Redis에 캐시하도록 monitor 모듈에 위임
         realtimeFeedbackService.updatePostureCache(
-                request.getUserId(),
+                safeUserId,
                 request.getPostureStates());
     }
 }

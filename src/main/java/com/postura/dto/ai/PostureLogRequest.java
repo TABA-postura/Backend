@@ -17,9 +17,6 @@ import java.util.List;
 public class PostureLogRequest {
 
     @NotNull
-    private Long userId;
-
-    @NotNull
     private Long sessionId;
 
     @NotNull
