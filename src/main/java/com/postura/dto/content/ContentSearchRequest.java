@@ -7,7 +7,6 @@ import lombok.Setter;
 @Setter
 public class ContentSearchRequest {
 
-    private String keyword;         // 제목 검색
-    private String category;        // VARCHAR(50) 기반
-    private String relatedPosture;  // 선택 사항: 연관된 자세 검색
+    private String keyword;    // 제목 검색
+    private String category;   // 카테고리 (전체, 자세, 스트레칭)
 }

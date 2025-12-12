@@ -16,6 +16,7 @@ public class ContentService {
 
     /**
      * 콘텐츠 검색 / 목록 조회
+     * - 카테고리와 키워드를 기준으로 콘텐츠를 검색합니다.
      */
     public List<ContentListResponse> searchContents(ContentSearchRequest request) {
 
@@ -37,37 +38,41 @@ public class ContentService {
         else if (hasKeyword) {
             result = contentRepository.findByTitleContainingIgnoreCase(request.getKeyword());
         }
-        // 전체 조회
+        // 전체 조회 (카테고리와 키워드 없이 모든 콘텐츠 조회)
         else {
             result = contentRepository.findAll();
         }
 
+        // 검색된 결과를 ContentListResponse로 변환하여 반환
         return result.stream()
                 .map(content -> ContentListResponse.builder()
                         .id(content.getGuideId())
                         .title(content.getTitle())
                         .category(content.getCategory())
                         .s3ImageUrl(content.getS3ImageUrl())
-                        .relatedPosture(content.getRelatedPosture())
+                        .relatedPart(content.getRelatedPart())
                         .build()
                 ).toList();
     }
 
     /**
      * 콘텐츠 상세 조회
+     * - id를 기반으로 콘텐츠의 상세 정보를 조회합니다.
      */
     public ContentDetailResponse getContentDetail(Long id) {
 
+        // id로 콘텐츠를 찾고, 없으면 예외를 발생
         Content content = contentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("콘텐츠를 찾을 수 없습니다."));
 
+        // 상세 정보를 반환
         return ContentDetailResponse.builder()
                 .id(content.getGuideId())
                 .title(content.getTitle())
                 .category(content.getCategory())
                 .contentText(content.getContentText())
                 .s3ImageUrl(content.getS3ImageUrl())
-                .relatedPosture(content.getRelatedPosture())
+                .relatedPart(content.getRelatedPart())
                 .build();
     }
 
@@ -88,15 +93,14 @@ public class ContentService {
         String relatedPostureKeyword = mapProblemTypeToPostureKeyword(problemType);
 
         // 2. ContentRepository를 사용하여 해당 키워드와 관련된 가이드 조회
-        //    (findByRelatedPosture 메서드가 ContentRepository에 정의되어야 함을 가정합니다.)
-        return contentRepository.findByRelatedPosture(relatedPostureKeyword);
+        return contentRepository.findByRelatedPart(relatedPostureKeyword);
     }
 
     /**
      * AI 문제 유형 코드를 Content 엔티티의 relatedPosture 키워드로 변환합니다.
+     * 예: "FORWARD_HEAD" -> "목", "UNE_SHOULDER" -> "어깨" 등
      */
     private String mapProblemTypeToPostureKeyword(String problemType) {
-        // 문제 유형에 따라 Content.relatedPosture에 정의된 키워드 (목, 어깨, 상체)를 반환합니다.
         switch (problemType) {
             case "FORWARD_HEAD":
             case "HEAD_TILT":
@@ -107,7 +111,7 @@ public class ContentService {
             case "UPPER_BODY_TILT":
             case "ASYMMETRIC_POSTURE":
             case "TOO_CLOSE":
-                return "상체"; // 또는 복합적인 문제를 커버할 수 있는 키워드
+                return "상체";  // 또는 복합적인 문제를 커버할 수 있는 키워드
             default:
                 return ""; // 해당 없음 (Good이거나 정의되지 않은 경우)
         }
