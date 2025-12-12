@@ -20,7 +20,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 
 @RestController
-@RequestMapping("/report")
+@RequestMapping("/api/report")
 @RequiredArgsConstructor
 @Slf4j
 public class ReportController {
@@ -49,7 +49,7 @@ public class ReportController {
     }
 
     /**
-     * [GET /report/weekly] 주간 통계 데이터 및 맞춤 추천 조회 엔드포인트
+     * [GET /api/report/weekly] 주간 통계 데이터 및 맞춤 추천 조회 엔드포인트
      * userId를 SecurityContext에서 안전하게 획득합니다.
      * @param weekStart 조회할 주의 시작일 (YYYY-MM-DD 형식, 선택적)
      * @return StatReportDto (주간 추이, 요약, 추천 목록)

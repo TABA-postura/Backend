@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/monitor")
+@RequestMapping("/api/monitor")
 @RequiredArgsConstructor
 @Slf4j
 public class FeedbackController {
@@ -45,7 +45,7 @@ public class FeedbackController {
         throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR, "인증된 사용자 ID 추출 실패: Principal 타입 불일치");
     }
     /**
-     * [GET /monitor/feedback] 실시간 자세 피드백 폴링 요청
+     * [GET /api/monitor/feedback] 실시간 자세 피드백 폴링 요청
      * React가 1초마다 최신 자세 상태 및 코칭 메시지를 조회
      * @return RealtimeFeedbackResponse
      */

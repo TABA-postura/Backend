@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/monitor")
+@RequestMapping("/api/monitor")
 @RequiredArgsConstructor
 @Slf4j
 public class SessionController {
@@ -48,7 +48,7 @@ public class SessionController {
     }
 
     /**
-     * [POST /monitor/start] 모니터링 세션 시작 요청
+     * [POST /api/monitor/start] 모니터링 세션 시작 요청
      * (userId를 DTO 받음)
      */
     @PostMapping("/start")
@@ -65,7 +65,7 @@ public class SessionController {
     }
 
     /**
-     * [POST /monitor/pause] 모니터링 세션 일시 정지 요철
+     * [POST /api/monitor/pause] 모니터링 세션 일시 정지 요철
      */
     @PostMapping("/pause")
     public ResponseEntity<Void> pauseSession(
@@ -82,7 +82,7 @@ public class SessionController {
     }
 
     /**
-     * [POST /monitor/resume] 모니터링 세션 재개 요철
+     * [POST /api/monitor/resume] 모니터링 세션 재개 요철
      */
     @PostMapping("/resume")
     public ResponseEntity<Void> resumeSession(
@@ -99,7 +99,7 @@ public class SessionController {
     }
 
     /**
-     * [POST /monitor/complete] 모니터링 세션 종료 요철
+     * [POST /api/monitor/complete] 모니터링 세션 종료 요철
      */
     @PostMapping("/complete")
     public ResponseEntity<Void> completeSession(
