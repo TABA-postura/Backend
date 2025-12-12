@@ -16,6 +16,9 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
     // 카테고리 + 제목 검색
     List<Content> findByCategoryAndTitleContainingIgnoreCase(String category, String keyword);
 
-    // related_posture 검색 (선택 사항)
-    List<Content> findByRelatedPosture(String posture);
+    // 관련된 자세 (relatedPosture) 검색
+    List<Content> findByRelatedPart(String posture);
+
+    // 카테고리 + 제목 + 관련 자세 검색
+    List<Content> findByCategoryAndTitleContainingIgnoreCaseAndRelatedPart(String category, String keyword, String posture);
 }

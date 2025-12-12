@@ -11,8 +11,8 @@ public class ContentDetailResponse {
 
     private Long id;               // guideId
     private String title;
-    private String category;       // VARCHAR(50)
-    private String contentText;    // TEXT
+    private String category;       // 카테고리
+    private String contentText;    // 상세 텍스트
     private String s3ImageUrl;     // S3 URL
-    private String relatedPosture; // 연관된 자세
+    private String relatedPart;    // 연관된 자세
 }
