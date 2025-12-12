@@ -3,7 +3,7 @@ package com.postura.auth.service;
 import com.postura.user.service.CustomUserDetails;
 import com.postura.dto.auth.TokenResponse;
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.io.Decoders; // 사용되지 않지만, 기존 import 유지 (선택 사항)
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +13,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets; // <--- 새로 추가된 import
 import java.security.Key;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -32,7 +33,12 @@ public class JwtTokenProvider {
             @Value("${jwt.access-token-expiration-in-milliseconds}") long accessTokenValidityInMilliseconds,
             @Value("${jwt.refresh-token-expiration-in-milliseconds}") long refreshTokenValidityInMilliseconds) {
 
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        // --- 이 부분이 수정되었습니다. (Base64 디코딩 제거) ---
+        // 이전 코드: byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+
+        // 수정 코드: 일반 문자열을 UTF-8 바이트 배열로 변환하여 사용
+        byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
+
         this.key = Keys.hmacShaKeyFor(keyBytes);
         this.accessTokenValidityInMilliseconds = accessTokenValidityInMilliseconds;
         this.refreshTokenValidityInMilliseconds = refreshTokenValidityInMilliseconds;
