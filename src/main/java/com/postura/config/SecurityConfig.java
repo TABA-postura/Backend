@@ -58,6 +58,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/reissue").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
+                        // 💡 추가: Monitor, AI, Report 모듈 API는 인증된 사용자만 접근 가능
+                        // /monitor/**, /report/** 경로 모두 인증 필요
+                        .requestMatchers("/api/monitor/**").authenticated()
+                        .requestMatchers("/api/report/**").authenticated()
 
                         // 🔥 Swagger / API Docs 허용
                         .requestMatchers(
