@@ -99,7 +99,8 @@ public class SecurityConfig {
         // ⚠️ 실제 배포에서는 S3/CloudFront 도메인 추가 필요
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
-                "http://localhost:8080"
+                "http://localhost:8080",
+                "https://d28g9sy3jh6o3a.cloudfront.net/"
         ));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
