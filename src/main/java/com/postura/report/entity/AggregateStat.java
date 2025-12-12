@@ -86,12 +86,12 @@ public class AggregateStat {
 
         // 2. 자세 유형별 카운트 업데이트
         this.forwardHeadCount = postureCount.getOrDefault("FORWARD_HEAD", 0);
-        this.unevenShoulderCount = postureCount.getOrDefault("UNE_SHOULDER", 0);
-        this.upperTiltCount = postureCount.getOrDefault("UPPER_TILT", 0);
+        this.unevenShoulderCount = postureCount.getOrDefault("UNEQUAL_SHOULDERS", 0);
+        this.upperTiltCount = postureCount.getOrDefault("UPPER_BODY_TILT", 0);
         this.tooCloseCount = postureCount.getOrDefault("TOO_CLOSE", 0);
-        this.asymmetricCount = postureCount.getOrDefault("ASYMMETRIC", 0);
+        this.asymmetricCount = postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0);
         this.headTiltCount = postureCount.getOrDefault("HEAD_TILT", 0);
-        this.armLeanCount = postureCount.getOrDefault("ARM_LEAN", 0);
+        this.armLeanCount = postureCount.getOrDefault("LEANING_ON_ARM", 0);
 
         // 이 메서드 실행 후, @Transactional이 적용된 서비스에서 save()를 호출하면 JPA가 UPDATE 쿼리를 실행
     }

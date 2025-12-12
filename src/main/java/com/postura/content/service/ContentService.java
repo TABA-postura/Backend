@@ -101,11 +101,11 @@ public class ContentService {
             case "FORWARD_HEAD":
             case "HEAD_TILT":
                 return "목";
-            case "UNE_SHOULDER":
-            case "ARM_LEAN":
+            case "UNEQUAL_SHOULDERS":
+            case "LEANING_ON_ARM":
                 return "어깨";
-            case "UPPER_TILT":
-            case "ASYMMETRIC":
+            case "UPPER_BODY_TILT":
+            case "ASYMMETRIC_POSTURE":
             case "TOO_CLOSE":
                 return "상체"; // 또는 복합적인 문제를 커버할 수 있는 키워드
             default:

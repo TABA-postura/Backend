@@ -151,12 +151,12 @@ public class SelfManagementService {
         // 모든 자세 유형 카운트를 초기화하고 집계
         for (AggregateStat stat : weeklyStats) {
             distribution.merge("FORWARD_HEAD", stat.getForwardHeadCount(), Integer::sum);
-            distribution.merge("UNE_SHOULDER", stat.getUnevenShoulderCount(), Integer::sum);
-            distribution.merge("UPPER_TILT", stat.getUpperTiltCount(), Integer::sum);
+            distribution.merge("UNEQUAL_SHOULDERS", stat.getUnevenShoulderCount(), Integer::sum);
+            distribution.merge("UPPER_BODY_TILT", stat.getUpperTiltCount(), Integer::sum);
             distribution.merge("TOO_CLOSE", stat.getTooCloseCount(), Integer::sum);
-            distribution.merge("ASYMMETRIC", stat.getAsymmetricCount(), Integer::sum);
+            distribution.merge("ASYMMETRIC_POSTURE", stat.getAsymmetricCount(), Integer::sum);
             distribution.merge("HEAD_TILT", stat.getHeadTiltCount(), Integer::sum);
-            distribution.merge("ARM_LEAN", stat.getArmLeanCount(), Integer::sum);
+            distribution.merge("LEANING_ON_ARM", stat.getArmLeanCount(), Integer::sum);
         }
 
         // 횟수가 0인 항목은 제외하고 반환 (파이 차트 데이터 구성 용이)

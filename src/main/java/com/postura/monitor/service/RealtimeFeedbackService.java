@@ -248,18 +248,18 @@ public class RealtimeFeedbackService {
      */
     private String getSingleFeedbackMessage(String postureState) {
         switch (postureState) {
-            case "Good":
+            case "GOOD":
                 return "훌륭합니다! 현재 바른 자세를 유지하고 있습니다. 이 상태를 계속 유지하세요.";
 
             case "FORWARD_HEAD":
                 // 7) 거북목
                 return "거북목 감지! 턱 당기기 운동을 하거나 화면과 거리를 두고 목을 뒤로 밀어주세요.";
 
-            case "UNE_SHOULDER":
+            case "UNEQUAL_SHOULDERS":
                 // 1) 한쪽 어깨 기울임
                 return "한쪽 어깨 기울임 감지! 상부 승모근 스트레칭이나 어깨/가슴 열기 스트레칭이 필요합니다.";
 
-            case "UPPER_TILT":
+            case "UPPER_BODY_TILT":
                 // 2) 상체 기울임 (좌/우)
                 return "상체 기울임 감지! 의자 등받이에 기대어 몸을 중앙에 맞추고, 측면 몸통 스트레칭을 해주세요.";
 
@@ -267,7 +267,7 @@ public class RealtimeFeedbackService {
                 // 3) 화면과 너무 가까움
                 return "화면 접근 감지! 의자를 뒤로 밀고 가슴 열기 스트레칭을 통해 몸을 이완시켜 주세요.";
 
-            case "ASYMMETRIC":
+            case "ASYMMETRIC_POSTURE":
                 // 4) 비대칭 자세 (복합 지표)
                 return "복합 비대칭 자세! 척추 회전 스트레칭이나 좌우 어깨 교차 스트레칭으로 균형을 맞춰주세요.";
 
@@ -275,7 +275,7 @@ public class RealtimeFeedbackService {
                 // 5) 머리 기울임
                 return "머리 기울임 감지! 목 측면(귀-어깨) 스트레칭을 통해 경부 부담을 완화해 주세요.";
 
-            case "ARM_LEAN":
+            case "LEANING_ON_ARM":
                 // 6) 팔 지지 자세
                 return "팔 지지 자세 감지! 손목/전완부 스트레칭 후, 양손을 무릎 위에 올려 바른 자세를 취해주세요.";
 

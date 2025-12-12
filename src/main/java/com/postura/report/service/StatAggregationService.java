@@ -136,12 +136,12 @@ public class StatAggregationService {
                     .consecutiveAchievedDays(consecutiveDays)
                     // 자세 유형별 카운트 매핑
                     .forwardHeadCount(postureCount.getOrDefault("FORWARD_HEAD", 0))
-                    .unevenShoulderCount(postureCount.getOrDefault("UNE_SHOULDER", 0))
-                    .upperTiltCount(postureCount.getOrDefault("UPPER_TILT", 0))
+                    .unevenShoulderCount(postureCount.getOrDefault("UNEQUAL_SHOULDERS", 0))
+                    .upperTiltCount(postureCount.getOrDefault("UPPER_BODY_TILT", 0))
                     .tooCloseCount(postureCount.getOrDefault("TOO_CLOSE", 0))
-                    .asymmetricCount(postureCount.getOrDefault("ASYMMETRIC", 0))
+                    .asymmetricCount(postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0))
                     .headTiltCount(postureCount.getOrDefault("HEAD_TILT", 0))
-                    .armLeanCount(postureCount.getOrDefault("ARM_LEAN", 0))
+                    .armLeanCount(postureCount.getOrDefault("LEANING_ON_ARM", 0))
                     .build();
         }
 
