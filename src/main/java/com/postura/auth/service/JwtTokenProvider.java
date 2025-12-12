@@ -1,5 +1,6 @@
 package com.postura.auth.service;
 
+import com.postura.user.entity.User;
 import com.postura.user.service.CustomUserDetails;
 import com.postura.dto.auth.TokenResponse;
 import io.jsonwebtoken.*;
@@ -121,6 +122,7 @@ public class JwtTokenProvider {
 
         // 권한이 있을 수도 있고 없을 수도 있음
         Collection<? extends GrantedAuthority> authorities = new ArrayList<>();
+        User.Role userRole = User.Role.USER;
 
         if (claims.get(AUTHORITIES_KEY) != null) {
             authorities = Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(","))
@@ -135,7 +137,7 @@ public class JwtTokenProvider {
                         .email(claims.getSubject())    // AccessToken일 때만 접근 가능
                         .passwordHash("")              // 필요 없음
                         .name("N/A")                   // 필요 없음
-                        .role(null)                    // AccessToken에서만 권한 의미 있음
+                        .role(userRole)                    // AccessToken에서만 권한 의미 있음
                         .build()
         );
 
