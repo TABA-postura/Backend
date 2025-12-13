@@ -52,8 +52,7 @@ public class SessionController {
      * (userId를 DTO 받음)
      */
     @PostMapping("/start")
-    public ResponseEntity<SessionStartResponse> startSession(
-            @Valid @RequestBody SessionControlRequest request)
+    public ResponseEntity<SessionStartResponse> startSession()
     {
         Long userId = getAuthenticatedUserId(); // 💡 JWT에서 userId 추출
         log.info("Request to START session for UserId: {}", userId);

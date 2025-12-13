@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class SessionControlRequest {
 
-    // 세션 시작 요철 시에는 null, 이후 제어 요청 시에는 필수
+    @NotNull
     private Long sessionId;
 
 }
