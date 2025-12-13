@@ -82,38 +82,12 @@ public class ContentService {
 
     /**
      * Report 모듈에서 가장 빈번한 문제 유형을 기반으로 스트레칭 가이드를 조회합니다.
-     * Content 엔티티의 relatedPosture 필드와 연결합니다.
-     * @param problemType AI 감지 신호 (예: "FORWARD_HEAD", "UNE_SHOULDER")
+     * Content 엔티티의 category="스트레칭"이고 posture 필드가 problemType과 일치하는 항목을 찾습니다.
+     * @param problemType AI 감지 신호 (예: "FORWARD_HEAD", "UNEQUAL_SHOULDERS")
      * @return Content 엔티티 리스트
      */
     public List<Content> getGuidesByProblemType(String problemType) {
-
-        // 1. AI 신호를 Content 엔티티의 'relatedPosture' 필드 값에 맞게 변환해야 합니다.
-        //    (예: "FORWARD_HEAD" -> "목")
-        String relatedPostureKeyword = mapProblemTypeToPostureKeyword(problemType);
-
-        // 2. ContentRepository를 사용하여 해당 키워드와 관련된 가이드 조회
-        return contentRepository.findByRelatedPart(relatedPostureKeyword);
-    }
-
-    /**
-     * AI 문제 유형 코드를 Content 엔티티의 relatedPosture 키워드로 변환합니다.
-     * 예: "FORWARD_HEAD" -> "목", "UNE_SHOULDER" -> "어깨" 등
-     */
-    private String mapProblemTypeToPostureKeyword(String problemType) {
-        switch (problemType) {
-            case "FORWARD_HEAD":
-            case "HEAD_TILT":
-                return "목";
-            case "UNEQUAL_SHOULDERS":
-            case "LEANING_ON_ARM":
-                return "어깨";
-            case "UPPER_BODY_TILT":
-            case "ASYMMETRIC_POSTURE":
-            case "TOO_CLOSE":
-                return "상체";  // 또는 복합적인 문제를 커버할 수 있는 키워드
-            default:
-                return ""; // 해당 없음 (Good이거나 정의되지 않은 경우)
-        }
+        // ContentRepository를 사용하여 'category'가 "스트레칭"이고 'posture'가 problemType과 일치하는 가이드 조회
+        return contentRepository.findByCategoryAndPosture("스트레칭", problemType);
     }
 }

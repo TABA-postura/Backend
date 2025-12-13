@@ -39,21 +39,21 @@ public class RealtimeFeedbackService {
 
     // 자세 유형별 누적 카운트 필드 추가
     private static final String FIELD_FH_COUNT = "fh_count"; // FORWARD_HEAD
-    private static final String FIELD_US_COUNT = "us_count"; // UNEVEN_SHOULDER
-    private static final String FIELD_UT_COUNT = "ut_count"; // UPPER_TILT
+    private static final String FIELD_US_COUNT = "us_count"; // UNEQUAL_SHOULDERS
+    private static final String FIELD_UT_COUNT = "ut_count"; // UPPER_BODY_TILT
     private static final String FIELD_TC_COUNT = "tc_count"; // TOO_CLOSE
-    private static final String FIELD_AS_COUNT = "as_count"; // ASYMMETRIC
+    private static final String FIELD_AS_COUNT = "as_count"; // ASYMMETRIC_POSTURE
     private static final String FIELD_HT_COUNT = "ht_count"; // HEAD_TILT
-    private static final String FIELD_AL_COUNT = "al_count"; // ARM_LEAN
+    private static final String FIELD_AL_COUNT = "al_count"; // LEANING_ON_ARM
 
     private static final Map<String, String> POSTURE_FIELD_MAP = Map.of(
             "FORWARD_HEAD", FIELD_FH_COUNT,
-            "UNE_SHOULDER", FIELD_US_COUNT,
-            "UPPER_TILT", FIELD_UT_COUNT,
+            "UNEQUAL_SHOULDERS", FIELD_US_COUNT,
+            "UPPER_BODY_TILT", FIELD_UT_COUNT,
             "TOO_CLOSE", FIELD_TC_COUNT,
-            "ASYMMETRIC", FIELD_AS_COUNT,
+            "ASYMMETRIC_POSTURE", FIELD_AS_COUNT,
             "HEAD_TILT", FIELD_HT_COUNT,
-            "ARM_LEAN", FIELD_AL_COUNT
+            "LEANING_ON_ARM", FIELD_AL_COUNT
     );
 
     /**
@@ -94,7 +94,7 @@ public class RealtimeFeedbackService {
             String redisKey = FEEDBACK_KEY_PREFIX + userId;
 
             // 1. 누적 카운트 계산
-            long goodCount = postureStates.stream().filter("Good"::equalsIgnoreCase).count();
+            long goodCount = postureStates.stream().filter("GOOD"::equalsIgnoreCase).count();
 
             // 2. 누적 카운트 갱신 (Atomic Increment)
             if (goodCount > 0) {
