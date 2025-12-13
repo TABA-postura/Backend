@@ -30,7 +30,7 @@ public class AggregateStat {
     private User user;
 
     // 2. 통계 집계 기준 날짜 (ex. 2025-11-24)
-    @Column(name = "stat_date", nullable = false, unique = true)
+    @Column(name = "stat_date", nullable = false)
     private LocalDate statDate; // -> 그래프에 사용
 
     // 3. 통계 지표
@@ -72,7 +72,7 @@ public class AggregateStat {
     private Integer headTiltCount; // 머리 기울임
 
     @Column(name = "leaning_on_arm_count", nullable = false)
-    private Integer LeaningOnArmCount; // 팔 지지 자세
+    private Integer leaningOnArmCount; // 팔 지지 자세
 
     /**
      * 배치 작업 재실행 시 기존 AggregateStat 데이터를 새로운 값으로 갱신
@@ -95,7 +95,7 @@ public class AggregateStat {
         this.tooCloseCount = postureCount.getOrDefault("TOO_CLOSE", 0);
         this.asymmetricPostureCount = postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0);
         this.headTiltCount = postureCount.getOrDefault("HEAD_TILT", 0);
-        this.LeaningOnArmCount = postureCount.getOrDefault("LEANING_ON_ARM", 0);
+        this.leaningOnArmCount = postureCount.getOrDefault("LEANING_ON_ARM", 0);
 
         // 이 메서드 실행 후, @Transactional이 적용된 서비스에서 save()를 호출하면 JPA가 UPDATE 쿼리를 실행
     }
