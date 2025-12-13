@@ -12,7 +12,11 @@ import java.util.Map;
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-@Table(name = "aggregate_stat")
+@Table(name = "aggregate_stat",
+        // user_id와 stat_date를 묶어서 복합 유니크 키로 지정
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"user_id", "stat_date"})
+        })
 public class AggregateStat {
 
     @Id
