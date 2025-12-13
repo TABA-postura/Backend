@@ -141,7 +141,7 @@ public class StatAggregationService {
                     .tooCloseCount(postureCount.getOrDefault("TOO_CLOSE", 0))
                     .asymmetricPostureCount(postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0))
                     .headTiltCount(postureCount.getOrDefault("HEAD_TILT", 0))
-                    .LeaningOnArmCount(postureCount.getOrDefault("LEANING_ON_ARM", 0))
+                    .leaningOnArmCount(postureCount.getOrDefault("LEANING_ON_ARM", 0))
                     .build();
         }
 
