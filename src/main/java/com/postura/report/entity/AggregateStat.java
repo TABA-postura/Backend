@@ -52,23 +52,23 @@ public class AggregateStat {
     @Column(name = "forward_head_count", nullable = false)
     private Integer forwardHeadCount; // 거북목
 
-    @Column(name = "uneven_shoulder_count", nullable = false)
-    private Integer unevenShoulderCount; // 한쪽 어깨 기울임
+    @Column(name = "unequal_shoulders_count", nullable = false)
+    private Integer unequalShouldersCount; // 한쪽 어깨 기울임
 
-    @Column(name = "upper_tilt_count", nullable = false)
-    private Integer upperTiltCount; // 상체 기울임
+    @Column(name = "upper_body_tilt_count", nullable = false)
+    private Integer upperBodyTiltCount; // 상체 기울임
 
     @Column(name = "too_close_count", nullable = false)
     private Integer tooCloseCount; // 화면과 너무 가까움
 
-    @Column(name = "asymmetric_count", nullable = false)
-    private Integer asymmetricCount; // 비대칭 자세
+    @Column(name = "asymmetric_posture_count", nullable = false)
+    private Integer asymmetricPostureCount; // 비대칭 자세
 
     @Column(name = "head_tilt_count", nullable = false)
     private Integer headTiltCount; // 머리 기울임
 
-    @Column(name = "arm_lean_count", nullable = false)
-    private Integer armLeanCount; // 팔 지지 자세
+    @Column(name = "leaning_on_arm_count", nullable = false)
+    private Integer LeaningOnArmCount; // 팔 지지 자세
 
     /**
      * 배치 작업 재실행 시 기존 AggregateStat 데이터를 새로운 값으로 갱신
@@ -86,12 +86,12 @@ public class AggregateStat {
 
         // 2. 자세 유형별 카운트 업데이트
         this.forwardHeadCount = postureCount.getOrDefault("FORWARD_HEAD", 0);
-        this.unevenShoulderCount = postureCount.getOrDefault("UNEQUAL_SHOULDERS", 0);
-        this.upperTiltCount = postureCount.getOrDefault("UPPER_BODY_TILT", 0);
+        this.unequalShouldersCount = postureCount.getOrDefault("UNEQUAL_SHOULDERS", 0);
+        this.upperBodyTiltCount = postureCount.getOrDefault("UPPER_BODY_TILT", 0);
         this.tooCloseCount = postureCount.getOrDefault("TOO_CLOSE", 0);
-        this.asymmetricCount = postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0);
+        this.asymmetricPostureCount = postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0);
         this.headTiltCount = postureCount.getOrDefault("HEAD_TILT", 0);
-        this.armLeanCount = postureCount.getOrDefault("LEANING_ON_ARM", 0);
+        this.LeaningOnArmCount = postureCount.getOrDefault("LEANING_ON_ARM", 0);
 
         // 이 메서드 실행 후, @Transactional이 적용된 서비스에서 save()를 호출하면 JPA가 UPDATE 쿼리를 실행
     }

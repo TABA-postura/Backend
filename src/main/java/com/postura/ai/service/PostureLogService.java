@@ -44,9 +44,9 @@ public class PostureLogService {
         User user = session.getUser();
         Long safeUserId = user.getId();
 
-        // 2. DB 저장 조건 검사: "Good"이나 "UNKNOWN"이 아닌 자세가 하나라도 있는지 검사
+        // 2. DB 저장 조건 검사: "GOOD"이나 "UNKNOWN"이 아닌 자세가 하나라도 있는지 검사
         boolean hasWarningPosture = request.getPostureStates().stream()
-                .anyMatch(state -> !state.equalsIgnoreCase("Good") && !state.equalsIgnoreCase("UNKNOWN"));
+                .anyMatch(state -> !state.equalsIgnoreCase("GOOD") && !state.equalsIgnoreCase("UNKNOWN"));
 
         // 3. 영구 저장 (RDS) - 조건부 실행
         if (hasWarningPosture) {
