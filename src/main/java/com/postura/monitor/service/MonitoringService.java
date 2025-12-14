@@ -133,19 +133,23 @@ public class MonitoringService {
             Long finalTotal = finalCounts.getOrDefault("finalTotalCount", 0L);
             Integer finalWarning = finalCounts.getOrDefault("finalWarningCount", 0L).intValue();
 
+            // 진단 로그 추가: Redis에서 가져온 카운트 확인
+            log.info("Redis Final Counts: Total={}, Good={}, Warning={}", finalTotal, finalGood, finalWarning);
+
             // 3. Entity 최종 업데이트 및 DB 저장 (COMPLETED 상태로 변경)
             session.complete(lastRunningDuration, finalGood, finalTotal, finalWarning);
             sessionRepository.save(session);
 
-            // 4. Redis 캐시 정리 - 세션 완료 후 캐시를 삭제하여 데이터 유출 방지
-            realtimeFeedbackService.clearUserCache(userId);
-
-            // 5. 오늘 날짜 통계 즉시 업데이트 로직
+            // 4. 오늘 날짜 통계 즉시 업데이트 로직
             try {
                 LocalDate today = LocalDate.now();
                 // 해당 사용자의 오늘 통계만 즉시 재계산 및 업데이트 (UPSERT)
                 statAggregationService.aggregateStatsForUser(userId, today);
                 log.info("On-demand stats update complete for user {} on {}.", userId, today);
+
+                // 5. Redis 캐시 정리 - 세션 완료 후 캐시를 삭제하여 데이터 유출 방지
+                realtimeFeedbackService.clearUserCache(userId);
+
             } catch (Exception e) {
                 // 통계 집계 실패는 세션 종료 자체를 막아서는 안 됨 (로그만 남김)
                 log.error("Failed to run on-demand aggregation after session completion: {}", e.getMessage());
