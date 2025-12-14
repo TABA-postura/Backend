@@ -1,6 +1,7 @@
 package com.postura.config;
 
 import com.postura.auth.filter.JwtAuthenticationFilter;
+import com.postura.auth.handler.OAuth2AuthenticationSuccessHandler;
 import com.postura.auth.service.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +27,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
+    // OAuth2 로그인 성공 후 처리를 위한 핸들러 주입
+    private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -46,61 +50,69 @@ public class SecurityConfig {
                 // CORS 설정 적용
                 .cors(Customizer.withDefaults())
 
-                // 세션을 사용하지 않는 Stateless 기반 보안 설정
+                // Stateless 세션 (JWT와 OAuth2 모두)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // 인가 규칙 설정
+                // 인가 규칙
                 .authorizeHttpRequests(auth -> auth
 
-                        // CORS Preflight 허용
+                        // Preflight 요청 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 🔥 Auth API 공개
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/reissue").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
-                        // 💡 추가: Monitor, AI, Report 모듈 API는 인증된 사용자만 접근 가능
-                        // /monitor/**, /report/** 경로 모두 인증 필요
-                        .requestMatchers("/monitor/**", "/api/monitor/**").authenticated()
-                        .requestMatchers("/report/**","/api/report/**").authenticated()
+                        // Auth API 전체 공개 (LOCAL + OAUTH 리다이렉션 경로 포함)
+                        .requestMatchers("/api/auth/**", "/oauth2/**", "/login/oauth2/code/**").permitAll()
 
-                        // 🔥 Swagger / API Docs 허용
+                        // AI 로그 공개
+                        .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
+
+                        // 인증 필요한 API
+                        .requestMatchers("/monitor/**", "/api/monitor/**").authenticated()
+                        .requestMatchers("/report/**", "/api/report/**").authenticated()
+
+                        // Swagger 허용
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-resources/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // 🔥 콘텐츠 API는 공개
+                        // 콘텐츠 공개
                         .requestMatchers("/api/content/**").permitAll()
 
-                        // 🔥 정적 파일 허용
+                        // 정적 리소스 허용
                         .requestMatchers("/videos/**", "/photo/**", "/static/**").permitAll()
 
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
 
-                // JWT 인증 필터 등록
-                .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
-                        UsernamePasswordAuthenticationFilter.class);
+                // 🚨 OAuth 2.0 로그인 활성화 (오류 수정 부분)
+                .oauth2Login(oauth2 -> oauth2
+                                // 인증 성공 후, OAuth2AuthenticationSuccessHandler 호출
+                                .successHandler(oAuth2AuthenticationSuccessHandler)
+                        // Spring Security가 사용자 정보 획득을 자동 처리하는 것을 막기 위해
+                        // .userInfoEndpoint() 체인 자체를 삭제합니다.
+                )
+
+                // JWT 필터
+                .addFilterBefore(
+                        new JwtAuthenticationFilter(jwtTokenProvider),
+                        UsernamePasswordAuthenticationFilter.class
+                );
 
         return http.build();
     }
 
     /**
-     * CORS 설정
+     * CORS 설정 (최종 도메인 추가)
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        // ⚠️ 실제 배포에서는 S3/CloudFront 도메인 추가 필요
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://localhost:8080",
@@ -109,12 +121,17 @@ public class SecurityConfig {
                 "http://api.taba-postura.com:8080"
         ));
 
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        config.setAllowedMethods(List.of(
+                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
+        ));
         config.setAllowedHeaders(List.of("*"));
-        config.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        config.setExposedHeaders(List.of(
+                "Authorization", "Content-Type"
+        ));
         config.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
 
         return source;
