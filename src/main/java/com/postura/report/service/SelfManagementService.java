@@ -75,7 +75,7 @@ public class SelfManagementService {
                 .weeklyAvgRatio(weeklyAvgRatio)
                 .currentTotalWarning(latestStat.getTotalWarningCount())
                 .currentConsecutiveAchievedDays(latestStat.getConsecutiveAchievedDays())
-                .mostFrequentIssue(top3FrequentIssues.isEmpty() ? "Good" : top3FrequentIssues.get(0))
+                .mostFrequentIssue(top3FrequentIssues.isEmpty() ? "GOOD" : top3FrequentIssues.get(0))
 
                 .weeklyTotalWarning(weeklyTotalWarning) // 주간 합산 경고 횟수
                 .ratioChangeVsPreviousWeek(ratioChangeVsPreviousWeek) // 전주 대비 변화율
@@ -151,12 +151,12 @@ public class SelfManagementService {
         // 모든 자세 유형 카운트를 초기화하고 집계
         for (AggregateStat stat : weeklyStats) {
             distribution.merge("FORWARD_HEAD", stat.getForwardHeadCount(), Integer::sum);
-            distribution.merge("UNEQUAL_SHOULDERS", stat.getUnevenShoulderCount(), Integer::sum);
-            distribution.merge("UPPER_BODY_TILT", stat.getUpperTiltCount(), Integer::sum);
+            distribution.merge("UNEQUAL_SHOULDERS", stat.getUnequalShouldersCount(), Integer::sum);
+            distribution.merge("UPPER_BODY_TILT", stat.getUpperBodyTiltCount(), Integer::sum);
             distribution.merge("TOO_CLOSE", stat.getTooCloseCount(), Integer::sum);
-            distribution.merge("ASYMMETRIC_POSTURE", stat.getAsymmetricCount(), Integer::sum);
+            distribution.merge("ASYMMETRIC_POSTURE", stat.getAsymmetricPostureCount(), Integer::sum);
             distribution.merge("HEAD_TILT", stat.getHeadTiltCount(), Integer::sum);
-            distribution.merge("LEANING_ON_ARM", stat.getArmLeanCount(), Integer::sum);
+            distribution.merge("LEANING_ON_ARM", stat.getLeaningOnArmCount(), Integer::sum);
         }
 
         // 횟수가 0인 항목은 제외하고 반환 (파이 차트 데이터 구성 용이)
@@ -171,7 +171,7 @@ public class SelfManagementService {
     private List<String> findTop3FrequentIssues(Map<String, Integer> distribution) {
         // "Good"이나 발생 횟수 0인 항목은 제외하고 내림차순 정렬 후 상위 3개만 추출
         return distribution.entrySet().stream()
-                .filter(entry -> !entry.getKey().equalsIgnoreCase("Good") && entry.getValue() > 0)
+                .filter(entry -> !entry.getKey().equalsIgnoreCase("GOOD") && entry.getValue() > 0)
                 .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
                 .limit(3)
                 .map(Map.Entry::getKey)

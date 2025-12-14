@@ -99,7 +99,7 @@ public class StatAggregationService {
         // 5. 자세 유형별 카운트 합산 (DB 로그 순회)
         for (PostureLog log : warningLogs) {
             for (String state : log.getPostureStates()) {
-                if (!"Good".equalsIgnoreCase(state) && !"UNKNOWN".equalsIgnoreCase(state)) {
+                if (!"GOOD".equalsIgnoreCase(state) && !"UNKNOWN".equalsIgnoreCase(state)) {
                     totalWarningCount += 1;
                     postureCount.merge(state, 1, Integer::sum);
                 }
@@ -136,12 +136,12 @@ public class StatAggregationService {
                     .consecutiveAchievedDays(consecutiveDays)
                     // 자세 유형별 카운트 매핑
                     .forwardHeadCount(postureCount.getOrDefault("FORWARD_HEAD", 0))
-                    .unevenShoulderCount(postureCount.getOrDefault("UNEQUAL_SHOULDERS", 0))
-                    .upperTiltCount(postureCount.getOrDefault("UPPER_BODY_TILT", 0))
+                    .unequalShouldersCount(postureCount.getOrDefault("UNEQUAL_SHOULDERS", 0))
+                    .upperBodyTiltCount(postureCount.getOrDefault("UPPER_BODY_TILT", 0))
                     .tooCloseCount(postureCount.getOrDefault("TOO_CLOSE", 0))
-                    .asymmetricCount(postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0))
+                    .asymmetricPostureCount(postureCount.getOrDefault("ASYMMETRIC_POSTURE", 0))
                     .headTiltCount(postureCount.getOrDefault("HEAD_TILT", 0))
-                    .armLeanCount(postureCount.getOrDefault("LEANING_ON_ARM", 0))
+                    .leaningOnArmCount(postureCount.getOrDefault("LEANING_ON_ARM", 0))
                     .build();
         }
 
@@ -185,12 +185,12 @@ public class StatAggregationService {
     private Map<String, Integer> initializePostureCountMap() {
         Map<String, Integer> map = new HashMap<>();
         map.put("FORWARD_HEAD", 0);
-        map.put("UNE_SHOULDER", 0);
-        map.put("UPPER_TILT", 0);
+        map.put("UNEQUAL_SHOULDERS", 0);
+        map.put("UPPER_BODY_TILT", 0);
         map.put("TOO_CLOSE", 0);
-        map.put("ASYMMETRIC", 0);
+        map.put("ASYMMETRIC_POSTURE", 0);
         map.put("HEAD_TILT", 0);
-        map.put("ARM_LEAN", 0);
+        map.put("LEANING_ON_ARM", 0);
         return map;
     }
 }

@@ -21,4 +21,9 @@ public interface ContentRepository extends JpaRepository<Content, Long> {
 
     // 카테고리 + 제목 + 관련 자세 검색
     List<Content> findByCategoryAndTitleContainingIgnoreCaseAndRelatedPart(String category, String keyword, String posture);
+
+    /**
+     * Report 모듈 연동용: category가 "스트레칭"이고 posture가 문제 유형과 일치하는 Content 목록을 조회합니다.
+     */
+    List<Content> findByCategoryAndPosture(String category, String posture);
 }
