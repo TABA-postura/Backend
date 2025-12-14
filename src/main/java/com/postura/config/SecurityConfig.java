@@ -36,8 +36,12 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                // JWT 기반 인증에서는 CSRF 비활성화
-                .csrf(csrf -> csrf.disable())
+                // JWT 기반 인증에서는 CSRF 비활성화 (전체 비활성화 대신, AI 경로만 예외처리)
+                // 수정: AI 서버 통신 경로 (/api/ai/**)에 대해 CSRF 보호를 명시적으로 제외
+                .csrf(csrf -> csrf
+                        .ignoringRequestMatchers("/api/ai/**") // AI 서버 통신 경로 제외
+                        .disable() // 기존의 전체 CSRF 비활성화는 유지
+                )
 
                 // CORS 설정 적용
                 .cors(Customizer.withDefaults())
@@ -101,7 +105,8 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://localhost:8080",
                 "https://d4s7gxwtaejst.cloudfront.net",
-                "https://taba-postura.com"
+                "https://taba-postura.com",
+                "http://api.taba-postura.com:8080"
         ));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
