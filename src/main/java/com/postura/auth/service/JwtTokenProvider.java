@@ -4,10 +4,8 @@ import com.postura.user.entity.User;
 import com.postura.user.service.CustomUserDetails;
 import com.postura.dto.auth.TokenResponse;
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
-// import org.springframework.beans.factory.annotation.Value; // 🔥 @Value 제거
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -19,7 +17,7 @@ import java.security.Key;
 import java.util.*;
 import java.util.stream.Collectors;
 
-// 🔥 Configuration Properties 클래스 임포트 (이 클래스가 별도 파일로 존재해야 합니다.)
+// Configuration Properties 클래스 임포트
 import com.postura.config.JwtProperties;
 
 @Slf4j
@@ -27,23 +25,21 @@ import com.postura.config.JwtProperties;
 public class JwtTokenProvider {
 
     private static final String AUTHORITIES_KEY = "auth";
+    // 시간 오차(Clock Skew) 허용 시간 설정 (5초는 일반적인 허용치입니다.)
+    private static final long ALLOWED_CLOCK_SKEW_SECONDS = 5;
 
     private final Key key;
     private final long accessTokenValidityInMilliseconds;
     private final long refreshTokenValidityInMilliseconds;
 
-    // 🔥 기존 @Value 생성자를 삭제하고, JwtProperties를 주입받는 생성자로 교체
+    // 🔥 JwtProperties 주입 생성자 (PlaceholderResolutionException 해결)
     public JwtTokenProvider(JwtProperties jwtProperties) {
 
-        // 1. Secret Key 처리: Properties 객체에서 값을 가져옴
         String secretKey = jwtProperties.getSecret();
-
-        // 2. 키 초기화 로직은 그대로 유지
         byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
 
-        // 3. 만료 시간 설정: Properties 객체에서 값을 가져와 필드에 할당
         this.accessTokenValidityInMilliseconds = jwtProperties.getAccessTokenExpirationInMilliseconds();
         this.refreshTokenValidityInMilliseconds = jwtProperties.getRefreshTokenExpirationInMilliseconds();
     }
@@ -52,7 +48,6 @@ public class JwtTokenProvider {
      * AccessToken + RefreshToken 생성 (일반 로그인용)
      */
     public TokenResponse generateToken(Authentication authentication) {
-        // ... (기존 로직 유지)
         String authorities = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
@@ -92,18 +87,15 @@ public class JwtTokenProvider {
 
     /**
      * Access Token을 생성합니다. (OAuth2용)
-     * @param userId 토큰의 주체(Subject)로 사용할 사용자 ID (String 형태)
-     * @return 생성된 JWT Access Token
      */
     public String createAccessToken(String userId) {
         long now = System.currentTimeMillis();
         Date accessExpiration = new Date(now + accessTokenValidityInMilliseconds);
 
-        // Access Token 생성 (권한 정보 및 email(Subject)은 임시로 userId로 대체)
+        // Access Token 생성
         return Jwts.builder()
                 .setSubject(userId)
                 .claim("userId", userId)
-                // TODO: OAuth2 성공 후 권한을 찾아서 claim(AUTHORITIES_KEY, authorities) 추가 필요
                 .setExpiration(accessExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
@@ -111,8 +103,6 @@ public class JwtTokenProvider {
 
     /**
      * Refresh Token을 생성합니다. (OAuth2용)
-     * @param userId 토큰의 주체(Subject)로 사용할 사용자 ID (String 형태)
-     * @return 생성된 JWT Refresh Token
      */
     public String createRefreshToken(String userId) {
         long now = System.currentTimeMillis();
@@ -144,6 +134,8 @@ public class JwtTokenProvider {
     public Claims getClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
+                // 🔥 Clock Skew 허용 설정 추가 (ExpiredJwtException 해결)
+                .setAllowedClockSkewSeconds(ALLOWED_CLOCK_SKEW_SECONDS)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
@@ -194,22 +186,23 @@ public class JwtTokenProvider {
      */
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+            Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    // 🔥 Clock Skew 허용 설정 추가 (ExpiredJwtException 해결)
+                    .setAllowedClockSkewSeconds(ALLOWED_CLOCK_SKEW_SECONDS)
+                    .build()
+                    .parseClaimsJws(token);
             return true;
 
         } catch (SecurityException | MalformedJwtException e) {
             log.info("잘못된 JWT 서명: {}", e.getMessage());
-
         } catch (ExpiredJwtException e) {
             log.info("만료된 JWT 토큰: {}", e.getMessage());
-
         } catch (UnsupportedJwtException e) {
             log.info("지원되지 않는 JWT 토큰: {}", e.getMessage());
-
         } catch (IllegalArgumentException e) {
             log.info("JWT 토큰이 비어 있습니다: {}", e.getMessage());
         }
-
         return false;
     }
 
