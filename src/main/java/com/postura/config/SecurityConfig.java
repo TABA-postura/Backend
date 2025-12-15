@@ -17,8 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint; // 💡 HttpStatusEntryPoint 임포트 유지
-import org.springframework.http.HttpStatus; // 💡 HttpStatus 임포트 유지
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -51,9 +51,6 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(httpBasic -> httpBasic.disable())
 
-                // 💡 .requiresChannel(...) 블록 제거: 컴파일 오류 발생으로 인해 제거함.
-                //    이 기능은 application.properties와 exceptionHandling이 대신 처리합니다.
-
                 // 3. CORS 설정 적용
                 .cors(Customizer.withDefaults())
 
@@ -66,6 +63,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // CORS Preflight 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // 🔥 Health Check 경로 추가 (ALB가 GET으로 호출)
+                        .requestMatchers(HttpMethod.GET, "/health").permitAll() // <-- 이 줄이 추가/수정되었습니다.
 
                         // Auth API 및 기타 공개 API (permitAll)
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup", "/api/auth/reissue", "/api/auth/logout", "/api/ai/log").permitAll()

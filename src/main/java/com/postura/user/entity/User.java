@@ -6,7 +6,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor; // ✅ RequiredArgsConstructor 임포트 추가
+import lombok.RequiredArgsConstructor;
 
 @Entity
 @Table(name = "users")
@@ -29,7 +29,7 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false)
     private String name;
 
-    // 🔥 필수 추가: OAuth2 프로필 사진 URL
+    // 🔥 OAuth2 프로필 사진 URL
     @Column(length = 512)
     private String picture;
 
@@ -39,13 +39,13 @@ public class User extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private AuthProvider provider;
+    private AuthProvider provider; // 🔥 NOT NULL 제약조건을 만족하도록 설정됨
 
     @Column(name = "provider_id")
     private String providerId;
 
     /**
-     * 🔥 수정된 Role enum: getKey() 메서드 사용 가능하도록 필드와 Lombok 어노테이션 추가
+     * 🔥 Role enum
      */
     @RequiredArgsConstructor
     @Getter
@@ -56,6 +56,9 @@ public class User extends BaseTimeEntity {
         private final String key; // Spring Security에서 사용하는 권한 키
     }
 
+    /**
+     * 🔥 AuthProvider enum (LOCAL 추가)
+     */
     public enum AuthProvider {
         LOCAL,
         KAKAO,
@@ -63,7 +66,7 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * @Builder 생성자: picture 필드를 포함하여 재정의
+     * @Builder 생성자
      */
     @Builder
     public User(
@@ -71,7 +74,7 @@ public class User extends BaseTimeEntity {
             String email,
             String passwordHash,
             String name,
-            String picture, // ✅ picture 필드 포함
+            String picture,
             Role role,
             AuthProvider provider,
             String providerId
@@ -109,14 +112,14 @@ public class User extends BaseTimeEntity {
     public static User createSocialUser(
             String email,
             String name,
-            String picture, // ✅ picture 파라미터 포함
+            String picture,
             AuthProvider provider,
             String providerId
     ) {
         return User.builder()
                 .email(email)
                 .name(name)
-                .picture(picture) // ✅ builder 호출 포함
+                .picture(picture)
                 .role(Role.USER)
                 .provider(provider)
                 .providerId(providerId)
@@ -124,7 +127,7 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * 로컬 회원가입 유저 생성용
+     * 🔥 로컬 회원가입 유저 생성용 (Provider NOT NULL 오류 해결)
      */
     public static User createLocalUser(
             String email,
@@ -135,9 +138,10 @@ public class User extends BaseTimeEntity {
                 .email(email)
                 .passwordHash(passwordHash)
                 .name(name)
-                .picture(null)
+                .picture(null) // 로컬 유저는 picture 없음
                 .role(Role.USER)
-                .provider(AuthProvider.LOCAL)
+                .provider(AuthProvider.LOCAL) // ✅ provider 필드에 'LOCAL' 값 명시
+                .providerId(null) // provider_id는 NULL 허용
                 .build();
     }
 }
