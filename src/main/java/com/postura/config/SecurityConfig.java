@@ -48,6 +48,9 @@ public class SecurityConfig {
                 // 2. CORS 설정 적용
                 .cors(Customizer.withDefaults())
 
+                // 명시적으로 Form Login 비활성화 (HTML 페이지 반환 방지)
+                .formLogin(formLogin -> formLogin.disable())
+
                 // 3. 세션을 사용하지 않는 Stateless 기반 보안 설정
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
