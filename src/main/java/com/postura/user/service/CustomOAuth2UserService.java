@@ -1,4 +1,4 @@
-package com.postura.auth.service;
+package com.postura.user.service;
 
 import com.postura.user.domain.CustomOAuth2User;
 import com.postura.user.domain.OAuth2Attributes;
