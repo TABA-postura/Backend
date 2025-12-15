@@ -1,8 +1,9 @@
 package com.postura.config;
 
 import com.postura.auth.filter.JwtAuthenticationFilter;
-import com.postura.auth.handler.OAuth2AuthenticationSuccessHandler; // 💡 핸들러 임포트
+import com.postura.auth.handler.OAuth2AuthenticationSuccessHandler;
 import com.postura.auth.service.JwtTokenProvider;
+import com.postura.user.service.CustomOAuth2UserService; // ✅ CustomOAuth2UserService 임포트 추가
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,11 +28,10 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
-    // ✅ OAuth2AuthenticationSuccessHandler 주입 (누락 해결)
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
 
-    // TODO: CustomOAuth2UserService를 구현했다면 주입받아야 합니다.
-    // private final CustomOAuth2UserService customOAuth2UserService;
+    // 🔥 1. CustomOAuth2UserService 필드 주입 (오류 해결)
+    private final CustomOAuth2UserService customOAuth2UserService;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -59,44 +59,44 @@ public class SecurityConfig {
                         // CORS Preflight 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 🔥 OAuth2 로그인 시작/콜백 경로 허용 (누락 추가)
+                        // OAuth2 로그인 시작/콜백 경로 허용
                         .requestMatchers(
                                 "/oauth2/**",
                                 "/login/oauth2/code/**"
                         ).permitAll()
 
-                        // 🔥 Auth API 및 기타 공개 API (기존 코드 유지)
+                        // Auth API 및 기타 공개 API
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/reissue").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
 
-                        // 💡 모니터링/리포트 경로는 인증 필요 (기존 코드 유지)
+                        // 모니터링/리포트 경로는 인증 필요
                         .requestMatchers("/monitor/**", "/api/monitor/**").authenticated()
                         .requestMatchers("/report/**","/api/report/**").authenticated()
 
-                        // 🔥 Swagger / API Docs 허용 (기존 코드 유지)
+                        // Swagger / API Docs 허용
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-resources/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // 🔥 콘텐츠 API는 공개 (기존 코드 유지)
+                        // 콘텐츠 API는 공개
                         .requestMatchers("/api/content/**").permitAll()
 
-                        // 🔥 정적 파일 허용 (기존 코드 유지)
+                        // 정적 파일 허용
                         .requestMatchers("/videos/**", "/photo/**", "/static/**").permitAll()
 
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
 
-                // 5. OAuth 2.0 로그인 활성화 (누락된 설정 추가)
+                // 5. OAuth 2.0 로그인 활성화
                 .oauth2Login(oauth2 -> oauth2
-                        // TODO: CustomOAuth2UserService를 구현했다면 주석 해제하여 연결
-                        // .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+                        // 🔥 2. CustomOAuth2UserService를 userInfoEndpoint에 연결 (오류 해결)
+                        .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
 
                         // ✅ 구현한 성공 핸들러를 지정하여 JWT 발급 로직 실행
                         .successHandler(oAuth2AuthenticationSuccessHandler)
@@ -114,7 +114,6 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // ... (CORS 설정은 기존과 동일)
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOrigins(List.of(
