@@ -17,7 +17,6 @@ public class AppProperties {
     public static class Oauth2 {
         /**
          * OAuth2 로그인 성공 후 JWT를 담아 리다이렉트할 프론트엔드 주소 (필수)
-         * 예시: https://taba-postura.com/oauth/redirect
          */
         private String authorizedRedirectUri;
     }

@@ -4,7 +4,7 @@ import com.postura.user.entity.User;
 import com.postura.user.service.CustomUserDetails;
 import com.postura.dto.auth.TokenResponse;
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders; // 사용되지 않지만, 기존 import 유지 (선택 사항)
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +14,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets; // <--- 새로 추가된 import
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,10 +34,7 @@ public class JwtTokenProvider {
             @Value("${jwt.access-token-expiration-in-milliseconds}") long accessTokenValidityInMilliseconds,
             @Value("${jwt.refresh-token-expiration-in-milliseconds}") long refreshTokenValidityInMilliseconds) {
 
-        // --- 이 부분이 수정되었습니다. (Base64 디코딩 제거) ---
-        // 이전 코드: byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-
-        // 수정 코드: 일반 문자열을 UTF-8 바이트 배열로 변환하여 사용
+        // 일반 문자열을 UTF-8 바이트 배열로 변환하여 사용 (기존 로직 유지)
         byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
@@ -46,7 +43,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * AccessToken + RefreshToken 생성
+     * AccessToken + RefreshToken 생성 (일반 로그인용)
      */
     public TokenResponse generateToken(Authentication authentication) {
 
@@ -82,6 +79,48 @@ public class JwtTokenProvider {
                 .refreshToken(refreshToken)
                 .build();
     }
+
+    // =========================================================================
+    // 🔥 OAuth2AuthenticationSuccessHandler에서 사용할 메서드 추가 (누락 해결)
+    // =========================================================================
+
+    /**
+     * Access Token을 생성합니다. (OAuth2용)
+     * @param userId 토큰의 주체(Subject)로 사용할 사용자 ID (String 형태)
+     * @return 생성된 JWT Access Token
+     */
+    public String createAccessToken(String userId) {
+        long now = System.currentTimeMillis();
+        Date accessExpiration = new Date(now + accessTokenValidityInMilliseconds);
+
+        // Access Token 생성 (권한 정보 및 email(Subject)은 임시로 userId로 대체)
+        return Jwts.builder()
+                .setSubject(userId)
+                .claim("userId", userId)
+                // TODO: OAuth2 성공 후 권한을 찾아서 claim(AUTHORITIES_KEY, authorities) 추가 필요
+                .setExpiration(accessExpiration)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    /**
+     * Refresh Token을 생성합니다. (OAuth2용)
+     * @param userId 토큰의 주체(Subject)로 사용할 사용자 ID (String 형태)
+     * @return 생성된 JWT Refresh Token
+     */
+    public String createRefreshToken(String userId) {
+        long now = System.currentTimeMillis();
+        Date refreshExpiration = new Date(now + refreshTokenValidityInMilliseconds);
+
+        // Refresh Token 생성 (userId 클레임만 사용)
+        return Jwts.builder()
+                .claim("userId", userId)
+                .setExpiration(refreshExpiration)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    // =========================================================================
 
     /**
      * Authorization 헤더에서 Bearer 토큰만 추출

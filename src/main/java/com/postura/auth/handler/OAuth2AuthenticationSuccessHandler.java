@@ -3,6 +3,7 @@ package com.postura.auth.handler;
 import com.postura.auth.service.JwtTokenProvider;
 import com.postura.config.properties.AppProperties;
 import com.postura.user.domain.CustomOAuth2User;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,9 +23,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final JwtTokenProvider tokenProvider;
     private final AppProperties appProperties;
-
-    // ⚠️ 주의: CustomOAuth2User는 실제 프로젝트의 OAuth2 User 클래스 이름으로 대체해야 합니다.
-    // ⚠️ 주의: AppProperties는 app.oauth2.authorized-redirect-uri 설정을 읽어오기 위해 필요합니다.
+    // private final RefreshTokenService refreshTokenService; // Refresh Token 저장을 위해 필요한 경우 주석 해제
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
@@ -34,14 +33,15 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         CustomOAuth2User oAuth2User = (CustomOAuth2User) authentication.getPrincipal();
 
         // 2. JWT 토큰 생성
-        String accessToken = tokenProvider.createAccessToken(oAuth2User.getName());
-        String refreshToken = tokenProvider.createRefreshToken(oAuth2User.getName());
+        String userId = oAuth2User.getName(); // CustomOAuth2User에서 정의한 고유 ID 사용
+        String accessToken = tokenProvider.createAccessToken(userId);
+        String refreshToken = tokenProvider.createRefreshToken(userId);
 
-        log.info("OAuth2 인증 성공. 사용자: {}, Access Token 생성 완료", oAuth2User.getName());
+        log.info("OAuth2 인증 성공. 사용자 ID: {}, Access Token 생성 완료", userId);
 
         // 3. 리프레시 토큰 저장 (Redis 또는 DB)
-        // TODO: Redis나 DB에 refreshToken을 저장하는 서비스 로직을 호출해야 합니다.
-        // 예시: refreshTokenService.saveRefreshToken(oAuth2User.getName(), refreshToken);
+        // TODO: Redis나 DB에 refreshToken을 저장하는 서비스 로직을 구현하고 아래 주석을 해제하세요.
+        // refreshTokenService.saveRefreshToken(userId, refreshToken);
 
         // 4. 리다이렉트 URL 생성: 프론트엔드로 JWT 토큰을 전달
         String targetUrl = determineTargetUrl(request, response, authentication);
@@ -60,8 +60,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
      */
     @Override
     protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
-        // application.properties의 app.oauth2.authorized-redirect-uri 값을 사용합니다.
-        // 예시: https://taba-postura.com/oauth/redirect
+        // AppProperties에 설정된 authorized-redirect-uri 값을 사용합니다.
         return appProperties.getOauth2().getAuthorizedRedirectUri();
     }
 }
