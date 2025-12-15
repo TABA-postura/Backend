@@ -32,23 +32,23 @@ public class UserService {
         }
 
         // 2. 비밀번호 해시(암호화) 처리
-        // DB에서 password_hash 컬럼에 저장
         String encodedPasswordHash = passwordEncoder.encode(request.getPassword());
 
         // 3. User 엔티티 생성
-        User user = User.builder()
-                .email(request.getEmail())
-                .passwordHash(encodedPasswordHash)
-                .name(request.getName())
-                .role(User.Role.USER)
-                .build();
+        // 🔥 User.builder() 대신, 로컬 회원가입 전용 팩토리 메서드를 사용합니다.
+        // 이 메서드 내부에서 provider 필드에 AuthProvider.LOCAL이 명시적으로 설정됩니다.
+        User user = User.createLocalUser(
+                request.getEmail(),
+                encodedPasswordHash,
+                request.getName()
+        );
 
         // 4. DB에 저장 후 반환
         return userRepository.save(user);
     }
 
     /**
-     *  이메일로 사용자 정보를 조회(주로 CustomUserDetailsService에서 사용)
+     * 이메일로 사용자 정보를 조회(주로 CustomUserDetailsService에서 사용)
      * @param email 사용자 이메일
      * @return User 엔티티
      */
