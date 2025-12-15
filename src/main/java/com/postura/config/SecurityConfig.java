@@ -3,7 +3,7 @@ package com.postura.config;
 import com.postura.auth.filter.JwtAuthenticationFilter;
 import com.postura.auth.handler.OAuth2AuthenticationSuccessHandler;
 import com.postura.auth.service.JwtTokenProvider;
-import com.postura.user.service.CustomOAuth2UserService; // ✅ CustomOAuth2UserService 임포트 추가
+import com.postura.user.service.CustomOAuth2UserService; // ✅ CustomOAuth2UserService 임포트
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,7 +30,7 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
 
-    // 🔥 1. CustomOAuth2UserService 필드 주입 (오류 해결)
+    // ✅ CustomOAuth2UserService 필드 주입 (빈 연결 오류 해결)
     private final CustomOAuth2UserService customOAuth2UserService;
 
     @Bean
@@ -45,39 +45,36 @@ public class SecurityConfig {
                 // 1. CSRF 비활성화 (JWT 기반 Stateless 환경)
                 .csrf(csrf -> csrf.disable())
 
-                // 2. CORS 설정 적용
+                // 2. Form Login 및 HTTP Basic 명시적 비활성화 (HTML 응답 차단)
+                .formLogin(form -> form.disable())
+                .httpBasic(httpBasic -> httpBasic.disable())
+
+                // 3. CORS 설정 적용
                 .cors(Customizer.withDefaults())
 
-                // 명시적으로 Form Login 비활성화 (HTML 페이지 반환 방지)
-                .formLogin(formLogin -> formLogin.disable())
-
-                // 3. 세션을 사용하지 않는 Stateless 기반 보안 설정
+                // 4. 세션을 사용하지 않는 Stateless 기반 보안 설정
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // 4. 인가 규칙 설정
+                // 5. 인가 규칙 설정
                 .authorizeHttpRequests(auth -> auth
 
                         // CORS Preflight 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // OAuth2 로그인 시작/콜백 경로 허용
-                        .requestMatchers(
-                                "/oauth2/**",
-                                "/login/oauth2/code/**"
-                        ).permitAll()
-
-                        // Auth API 및 기타 공개 API
+                        // Auth API 및 기타 공개 API (POST 메서드 명시)
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/reissue").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
 
-                        // 모니터링/리포트 경로는 인증 필요
-                        .requestMatchers("/monitor/**", "/api/monitor/**").authenticated()
-                        .requestMatchers("/report/**","/api/report/**").authenticated()
+                        // OAuth2 로그인 시작/콜백 경로 허용
+                        .requestMatchers(
+                                "/oauth2/**",
+                                "/login/oauth2/code/**"
+                        ).permitAll()
 
                         // Swagger / API Docs 허용
                         .requestMatchers(
@@ -86,26 +83,23 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
 
-                        // 콘텐츠 API는 공개
-                        .requestMatchers("/api/content/**").permitAll()
-
-                        // 정적 파일 허용
-                        .requestMatchers("/videos/**", "/photo/**", "/static/**").permitAll()
+                        // 콘텐츠 API 및 정적 파일 허용
+                        .requestMatchers("/api/content/**", "/videos/**", "/photo/**", "/static/**").permitAll()
 
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()
                 )
 
-                // 5. OAuth 2.0 로그인 활성화
+                // 6. OAuth 2.0 로그인 활성화
                 .oauth2Login(oauth2 -> oauth2
-                        // 🔥 2. CustomOAuth2UserService를 userInfoEndpoint에 연결 (오류 해결)
+                        // ✅ CustomOAuth2UserService 연결
                         .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
 
                         // ✅ 구현한 성공 핸들러를 지정하여 JWT 발급 로직 실행
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                 )
 
-                // 6. JWT 인증 필터 등록 (기존 코드 유지)
+                // 7. JWT 인증 필터 등록
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);
 
@@ -113,7 +107,7 @@ public class SecurityConfig {
     }
 
     /**
-     * CORS 설정 (기존 코드 유지)
+     * CORS 설정
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
