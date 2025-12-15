@@ -17,6 +17,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint; // 💡 HttpStatusEntryPoint 임포트 유지
+import org.springframework.http.HttpStatus; // 💡 HttpStatus 임포트 유지
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -30,7 +32,7 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
 
-    // ✅ CustomOAuth2UserService 필드 주입 (빈 연결 오류 해결)
+    // ✅ CustomOAuth2UserService 필드 주입
     private final CustomOAuth2UserService customOAuth2UserService;
 
     @Bean
@@ -49,6 +51,9 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(httpBasic -> httpBasic.disable())
 
+                // 💡 .requiresChannel(...) 블록 제거: 컴파일 오류 발생으로 인해 제거함.
+                //    이 기능은 application.properties와 exceptionHandling이 대신 처리합니다.
+
                 // 3. CORS 설정 적용
                 .cors(Customizer.withDefaults())
 
@@ -59,32 +64,24 @@ public class SecurityConfig {
 
                 // 5. 인가 규칙 설정
                 .authorizeHttpRequests(auth -> auth
-
                         // CORS Preflight 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Auth API 및 기타 공개 API (POST 메서드 명시)
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/reissue").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
+                        // Auth API 및 기타 공개 API (permitAll)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup", "/api/auth/reissue", "/api/auth/logout", "/api/ai/log").permitAll()
 
                         // OAuth2 로그인 시작/콜백 경로 허용
-                        .requestMatchers(
-                                "/oauth2/**",
-                                "/login/oauth2/code/**"
-                        ).permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/code/**").permitAll()
 
                         // Swagger / API Docs 허용
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-resources/**",
-                                "/v3/api-docs/**"
-                        ).permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-resources/**", "/v3/api-docs/**").permitAll()
 
                         // 콘텐츠 API 및 정적 파일 허용
                         .requestMatchers("/api/content/**", "/videos/**", "/photo/**", "/static/**").permitAll()
+
+                        // 모니터링/리포트 경로는 인증 필요
+                        .requestMatchers("/monitor/**", "/api/monitor/**").authenticated()
+                        .requestMatchers("/report/**","/api/report/**").authenticated()
 
                         // 그 외는 인증 필요
                         .anyRequest().authenticated()
@@ -94,12 +91,14 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         // ✅ CustomOAuth2UserService 연결
                         .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
-
                         // ✅ 구현한 성공 핸들러를 지정하여 JWT 발급 로직 실행
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                 )
 
-                // 7. JWT 인증 필터 등록
+                // 7. 예외 처리: 인증되지 않은 요청에 대해 401 UNAUTHORIZED 반환 강제 (302 리다이렉트 차단)
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+
+                // 8. JWT 인증 필터 등록
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);
 
