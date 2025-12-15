@@ -7,7 +7,7 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+// import org.springframework.beans.factory.annotation.Value; // 🔥 @Value 제거
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -19,6 +19,9 @@ import java.security.Key;
 import java.util.*;
 import java.util.stream.Collectors;
 
+// 🔥 Configuration Properties 클래스 임포트 (이 클래스가 별도 파일로 존재해야 합니다.)
+import com.postura.config.JwtProperties;
+
 @Slf4j
 @Component
 public class JwtTokenProvider {
@@ -29,24 +32,27 @@ public class JwtTokenProvider {
     private final long accessTokenValidityInMilliseconds;
     private final long refreshTokenValidityInMilliseconds;
 
-    public JwtTokenProvider(
-            @Value("${jwt.secret}") String secretKey,
-            @Value("${jwt.access-token-expiration-in-milliseconds}") long accessTokenValidityInMilliseconds,
-            @Value("${jwt.refresh-token-expiration-in-milliseconds}") long refreshTokenValidityInMilliseconds) {
+    // 🔥 기존 @Value 생성자를 삭제하고, JwtProperties를 주입받는 생성자로 교체
+    public JwtTokenProvider(JwtProperties jwtProperties) {
 
-        // 일반 문자열을 UTF-8 바이트 배열로 변환하여 사용 (기존 로직 유지)
+        // 1. Secret Key 처리: Properties 객체에서 값을 가져옴
+        String secretKey = jwtProperties.getSecret();
+
+        // 2. 키 초기화 로직은 그대로 유지
         byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
-        this.accessTokenValidityInMilliseconds = accessTokenValidityInMilliseconds;
-        this.refreshTokenValidityInMilliseconds = refreshTokenValidityInMilliseconds;
+
+        // 3. 만료 시간 설정: Properties 객체에서 값을 가져와 필드에 할당
+        this.accessTokenValidityInMilliseconds = jwtProperties.getAccessTokenExpirationInMilliseconds();
+        this.refreshTokenValidityInMilliseconds = jwtProperties.getRefreshTokenExpirationInMilliseconds();
     }
 
     /**
      * AccessToken + RefreshToken 생성 (일반 로그인용)
      */
     public TokenResponse generateToken(Authentication authentication) {
-
+        // ... (기존 로직 유지)
         String authorities = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
@@ -81,7 +87,7 @@ public class JwtTokenProvider {
     }
 
     // =========================================================================
-    // 🔥 OAuth2AuthenticationSuccessHandler에서 사용할 메서드 추가 (누락 해결)
+    // OAuth2AuthenticationSuccessHandler에서 사용할 메서드 추가
     // =========================================================================
 
     /**
