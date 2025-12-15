@@ -43,17 +43,20 @@ public class AuthController {
     /**
      * POST /api/auth/oauth/{provider} : 소셜 로그인
      *
-     * provider = KAKAO | GOOGLE
+     * 🚨 삭제/주석 처리: 이 API는 Spring Security OAuth2 Success Handler와 충돌하며,
+     * OAuthService.login 메서드의 파라미터 불일치 오류를 일으킵니다.
+     * SecurityConfig의 Success Handler가 이 역할을 대신 수행합니다.
      */
-    @PostMapping("/oauth/{provider}")
-    public ResponseEntity<TokenResponse> oauthLogin(
-            @PathVariable AuthProvider provider,
-            @RequestBody @Valid OAuthLoginRequest request
-    ) {
-        TokenResponse response =
-                oAuthService.login(provider, request.getCode());
-        return ResponseEntity.ok(response);
-    }
+    // @PostMapping("/oauth/{provider}")
+    // public ResponseEntity<TokenResponse> oauthLogin(
+    //         @PathVariable AuthProvider provider,
+    //         @RequestBody @Valid OAuthLoginRequest request
+    // ) {
+    //     // 이 부분의 oAuthService.login 호출이 String을 UserInfo로 변환할 수 없어 오류를 일으켰습니다.
+    //     // Spring Security OAuth2 플로우를 따르기 위해 이 메서드는 불필요하므로 제거합니다.
+    //     return null;
+    // }
+
 
     /**
      * POST /api/auth/reissue : 토큰 재발급
