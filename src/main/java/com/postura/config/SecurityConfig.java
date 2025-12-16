@@ -3,7 +3,7 @@ package com.postura.config;
 import com.postura.auth.filter.JwtAuthenticationFilter;
 import com.postura.auth.handler.OAuth2AuthenticationSuccessHandler;
 import com.postura.auth.service.JwtTokenProvider;
-import com.postura.user.service.CustomOAuth2UserService; // ✅ CustomOAuth2UserService 임포트
+import com.postura.user.service.CustomOAuth2UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -32,7 +32,6 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
 
-    // ✅ CustomOAuth2UserService 필드 주입
     private final CustomOAuth2UserService customOAuth2UserService;
 
     @Bean
@@ -64,14 +63,17 @@ public class SecurityConfig {
                         // CORS Preflight 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 🔥 Health Check 경로 추가 (ALB가 GET으로 호출)
-                        .requestMatchers(HttpMethod.GET, "/health").permitAll() // <-- 이 줄이 추가/수정되었습니다.
+                        // Health Check 경로 허용
+                        .requestMatchers(HttpMethod.GET, "/health").permitAll()
 
                         // Auth API 및 기타 공개 API (permitAll)
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup", "/api/auth/reissue", "/api/auth/logout", "/api/ai/log").permitAll()
 
                         // OAuth2 로그인 시작/콜백 경로 허용
                         .requestMatchers("/oauth2/**", "/login/oauth2/code/**").permitAll()
+
+                        // 🔥 수정: OAuth2 성공 후 토큰을 전달하는 최종 리다이렉트 URI를 permitAll에 추가
+                        .requestMatchers("/oauth/redirect").permitAll()
 
                         // Swagger / API Docs 허용
                         .requestMatchers("/swagger-ui/**", "/swagger-resources/**", "/v3/api-docs/**").permitAll()
@@ -89,9 +91,9 @@ public class SecurityConfig {
 
                 // 6. OAuth 2.0 로그인 활성화
                 .oauth2Login(oauth2 -> oauth2
-                        // ✅ CustomOAuth2UserService 연결
+                        // CustomOAuth2UserService 연결
                         .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
-                        // ✅ 구현한 성공 핸들러를 지정하여 JWT 발급 로직 실행
+                        // 구현한 성공 핸들러를 지정하여 JWT 발급 로직 실행
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                 )
 
