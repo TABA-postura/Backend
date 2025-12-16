@@ -48,6 +48,10 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         // 4. DB에 사용자 저장/업데이트
         User user = saveOrUpdate(oAuth2Attributes);
 
+        // 🔥🔥 추가할 로그: DB 저장 성공 여부를 확인하는 결정적인 로그
+        log.info("✅ DB 저장 완료: Provider={} | Email={} | UserID={}",
+                registrationId, user.getEmail(), user.getId());
+
         // 5. Spring Security CustomOAuth2User 객체 생성 및 반환
         return new CustomOAuth2User(
                 Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey())),
