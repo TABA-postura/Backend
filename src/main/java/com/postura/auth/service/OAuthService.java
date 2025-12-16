@@ -5,7 +5,7 @@ import com.postura.user.service.CustomUserDetails;
 import com.postura.user.entity.User;
 import com.postura.user.entity.User.AuthProvider;
 import com.postura.user.repository.UserRepository;
-import com.postura.dto.auth.UserInfo; // ✅ UserInfo DTO 사용
+import com.postura.dto.auth.UserInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,7 +24,7 @@ public class OAuthService {
     private final JwtTokenProvider jwtTokenProvider;
 
     /**
-     * 🔥 최종 수정된 login 메서드: UserInfo DTO를 파라미터로 받습니다.
+     * 최종 수정된 login 메서드: UserInfo DTO를 파라미터로 받습니다.
      */
     @Transactional
     public TokenResponse login(AuthProvider provider, UserInfo userInfo) {
@@ -32,12 +32,12 @@ public class OAuthService {
         // 1. 사용자 조회 (email 기반)
         User user = userRepository.findByEmail(userInfo.getEmail())
                 .orElseGet(() ->
-                        // 2. 사용자가 없으면 새로 생성 (image_18c4ba.png 오류 해결)
+                        // 2. 사용자가 없으면 새로 생성
                         userRepository.save(
                                 User.createSocialUser(
                                         userInfo.getEmail(),
                                         userInfo.getName(),
-                                        userInfo.getPicture(), // ✅ picture 파라미터 전달
+                                        userInfo.getPicture(),
                                         userInfo.getProvider(),
                                         userInfo.getProviderId()
                                 )
@@ -45,7 +45,13 @@ public class OAuthService {
                 );
 
         // 3. 사용자 정보 업데이트
-        user.update(userInfo.getName(), userInfo.getPicture());
+        // ✅ 수정: 변경된 User.update() 시그니처에 맞춰 AuthProvider와 ProviderId를 함께 전달합니다.
+        user.update(
+                userInfo.getName(),
+                userInfo.getPicture(),
+                userInfo.getProvider(),      // AuthProvider 추가
+                userInfo.getProviderId()     // ProviderId 추가
+        );
 
         // 4. CustomUserDetails 생성
         CustomUserDetails userDetails = new CustomUserDetails(user);
