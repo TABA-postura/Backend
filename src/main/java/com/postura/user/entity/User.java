@@ -24,7 +24,7 @@ public class User extends BaseTimeEntity {
     private String email;
 
     @Column(name = "password_hash", length = 255)
-    private String passwordHash; // 이 필드가 DB에서 NOT NULL일 가능성이 높습니다.
+    private String passwordHash; // 이 필드는 DB에서 NULL을 허용하는 것으로 확인됨.
 
     @Column(nullable = false)
     private String name;
@@ -39,7 +39,7 @@ public class User extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private AuthProvider provider; // 🔥 NOT NULL 제약조건을 만족하도록 설정됨
+    private AuthProvider provider; // NOT NULL 제약조건 만족
 
     @Column(name = "provider_id")
     private String providerId;
@@ -108,7 +108,7 @@ public class User extends BaseTimeEntity {
 
     /**
      * 소셜 로그인 유저 생성용 팩토리 메서드
-     * 🔥 수정 완료: passwordHash에 빈 문자열 할당
+     * 🔥 재수정 완료: DB 스키마 확인 결과 passwordHash에 null을 명시합니다.
      */
     public static User createSocialUser(
             String email,
@@ -119,7 +119,7 @@ public class User extends BaseTimeEntity {
     ) {
         return User.builder()
                 .email(email)
-                .passwordHash("") // ✅ 수정: DB NOT NULL 제약조건을 피하기 위해 빈 문자열 할당
+                .passwordHash(null) // ✅ 수정: DB 스키마가 NULL을 허용하므로 null로 설정
                 .name(name)
                 .picture(picture)
                 .role(Role.USER)

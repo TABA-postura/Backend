@@ -95,7 +95,7 @@ public class JwtTokenProvider {
         // Access Token 생성
         return Jwts.builder()
                 .setSubject(userId)
-                .claim("userId", userId)
+                .claim("userId", userId) // userId는 String 타입으로 저장됨
                 .setExpiration(accessExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
@@ -155,7 +155,20 @@ public class JwtTokenProvider {
      */
     public Authentication getAuthenticationFromClaims(Claims claims, String token) {
 
-        Long userId = claims.get("userId", Long.class);
+        // 🚨 수정: OAuth2 토큰 생성 시 String으로 저장된 userId 클레임을 String으로 읽고, Long으로 변환
+        String userIdString = claims.get("userId", String.class);
+        Long userId = null;
+
+        if (userIdString != null) {
+            try {
+                // String을 Long으로 변환 (DB ID 타입에 맞춤)
+                userId = Long.valueOf(userIdString);
+            } catch (NumberFormatException e) {
+                log.error("JWT userId 클레임 변환 오류: String '{}' to Long 실패", userIdString);
+                // 변환 실패 시 예외를 던지거나, 인증 실패로 처리 (여기서는 런타임 예외로 처리)
+                throw new JwtException("Invalid user ID format in token: " + userIdString);
+            }
+        }
 
         // 권한이 있을 수도 있고 없을 수도 있음
         Collection<? extends GrantedAuthority> authorities = new ArrayList<>();
@@ -202,6 +215,8 @@ public class JwtTokenProvider {
             log.info("지원되지 않는 JWT 토큰: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
             log.info("JWT 토큰이 비어 있습니다: {}", e.getMessage());
+        } catch (JwtException e) {
+            log.info("JWT 처리 중 오류 발생: {}", e.getMessage()); // 추가된 RuntimeException 처리
         }
         return false;
     }
