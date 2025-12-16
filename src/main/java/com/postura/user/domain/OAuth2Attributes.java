@@ -62,16 +62,18 @@ public class OAuth2Attributes {
     }
 
     /**
-     * 🔥 수정된 부분: User 엔티티의 팩토리 메서드를 사용하도록 변경
+     * 🔥 수정 완료: User 엔티티의 팩토리 메서드를 사용하도록 변경 및 providerId 전달
      */
     public User toEntity() {
-        // User.createSocialUser 팩토리 메서드를 사용하여 User 엔티티를 생성합니다.
+        // nameAttributeKey에 해당하는 실제 값 (Google의 'sub' 등)을 providerId로 사용합니다.
+        String actualProviderId = String.valueOf(this.getAttributes().get(this.getNameAttributeKey()));
+
         return User.createSocialUser(
                 email,
                 name,
-                picture, // picture 필드 전달
+                picture,
                 provider,
-                null // providerId는 CustomOAuth2UserService에서 직접 처리하거나 User 엔티티 생성 시 결정
+                actualProviderId // ✅ 소셜 서비스의 고유 ID(providerId)를 전달합니다.
         );
     }
 }
