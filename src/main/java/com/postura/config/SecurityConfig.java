@@ -21,6 +21,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import com.postura.user.service.CustomOidcUserService;
+
 
 import java.util.List;
 
@@ -32,6 +34,8 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final OAuth2AuthenticationSuccessHandler oAuth2AuthenticationSuccessHandler;
     private final CustomOAuth2UserService customOAuth2UserService;
+    private final CustomOidcUserService customOidcUserService;
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -96,9 +100,13 @@ public class SecurityConfig {
 
                 // 6) OAuth2 로그인
                 .oauth2Login(oauth2 -> oauth2
-                        .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .userService(customOAuth2UserService)        // kakao 등 OAuth2
+                                .oidcUserService(customOidcUserService)      // google 등 OIDC
+                        )
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                 )
+
 
                 // 7) 인증 실패 시 401로 통일 (302 리다이렉트 방지)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
