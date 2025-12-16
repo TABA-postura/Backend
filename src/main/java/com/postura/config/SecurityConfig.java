@@ -55,6 +55,8 @@ public class SecurityConfig {
 
                 // 🔥 3.5. HTTPS 채널 요구 강제 (ALB/CloudFront 환경 필수 설정)
                 .requiresChannel(channel -> channel
+                        // HTTP 허용이 필요한 특수 경로를 가장 먼저 설정
+                        .requestMatchers("/api/ai/**").requiresInsecure()
                         // OAuth2 콜백 경로는 무조건 보안 채널(HTTPS) 요구
                         .requestMatchers("/login/oauth2/code/**").requiresSecure()
                         // 모든 요청을 HTTPS로 강제 (ALB 환경에서 리다이렉트 오류 방지)
@@ -66,15 +68,8 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // 5. 채널 보안 설정: AI 서버 통신 (내부 통신)은 HTTP를 허용하도록 명시
-                .requiresChannel(ch -> ch
-                                // /api/ai/** 경로는 HTTPS 강제 없이 HTTP (insecure)를 허용합니다.
-                                .requestMatchers("/api/ai/**").requiresInsecure()
-                        // 다른 모든 요청은 requiresSecure()로 설정되지 않도록 유지합니다.
-                        // (application.properties의 forward-headers-strategy가 외부 HTTPS 종료를 처리)
-                )
 
-                // 6. 인가 규칙 설정
+                // 5. 인가 규칙 설정
                 .authorizeHttpRequests(auth -> auth
                         // CORS Preflight 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -105,7 +100,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // 7. OAuth 2.0 로그인 활성화
+                // 6. OAuth 2.0 로그인 활성화
                 .oauth2Login(oauth2 -> oauth2
                         // CustomOAuth2UserService 연결
                         .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
@@ -113,10 +108,10 @@ public class SecurityConfig {
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                 )
 
-                // 8. 예외 처리: 인증되지 않은 요청에 대해 401 UNAUTHORIZED 반환 강제 (302 리다이렉트 차단)
+                // 7. 예외 처리: 인증되지 않은 요청에 대해 401 UNAUTHORIZED 반환 강제 (302 리다이렉트 차단)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 
-                // 9. JWT 인증 필터 등록
+                // 8. JWT 인증 필터 등록
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);
 
