@@ -19,15 +19,21 @@ public class OAuth2Attributes {
     private final String picture;
     private final AuthProvider provider;
 
+    // ✅ 추가: providerId 필드 (Google의 sub, Kakao의 id 등 고유 식별자)
+    private final String providerId;
+
     @Builder
-    public OAuth2Attributes(Map<String, Object> attributes, String nameAttributeKey, String name, String email, String picture, AuthProvider provider) {
+    public OAuth2Attributes(Map<String, Object> attributes, String nameAttributeKey, String name, String email, String picture, AuthProvider provider, String providerId) {
         this.attributes = attributes;
         this.nameAttributeKey = nameAttributeKey;
         this.name = name;
         this.email = email;
         this.picture = picture;
         this.provider = provider;
+        this.providerId = providerId; // ✅ 추가
     }
+
+    // getProviderId() getter는 @Getter 어노테이션에 의해 자동으로 생성됩니다.
 
     public static OAuth2Attributes of(String registrationId, String userNameAttributeName, Map<String, Object> attributes) {
         if ("kakao".equalsIgnoreCase(registrationId)) {
@@ -37,6 +43,9 @@ public class OAuth2Attributes {
     }
 
     private static OAuth2Attributes ofGoogle(String userNameAttributeName, Map<String, Object> attributes) {
+        // nameAttributeKey에 해당하는 실제 값 (Google의 'sub')을 providerId로 사용
+        String providerId = String.valueOf(attributes.get(userNameAttributeName));
+
         return OAuth2Attributes.builder()
                 .name(String.valueOf(attributes.get("name")))
                 .email(String.valueOf(attributes.get("email")))
@@ -44,12 +53,16 @@ public class OAuth2Attributes {
                 .attributes(attributes)
                 .nameAttributeKey(userNameAttributeName)
                 .provider(AuthProvider.GOOGLE)
+                .providerId(providerId) // ✅ 추가
                 .build();
     }
 
     private static OAuth2Attributes ofKakao(String userNameAttributeName, Map<String, Object> attributes) {
         Map<String, Object> kakaoAccount = (Map<String, Object>) attributes.get("kakao_account");
         Map<String, Object> profile = (Map<String, Object>) kakaoAccount.get("profile");
+
+        // nameAttributeKey에 해당하는 실제 값 (Kakao의 'id')을 providerId로 사용
+        String providerId = String.valueOf(attributes.get(userNameAttributeName));
 
         return OAuth2Attributes.builder()
                 .name(String.valueOf(profile.get("nickname")))
@@ -58,22 +71,22 @@ public class OAuth2Attributes {
                 .attributes(attributes)
                 .nameAttributeKey(userNameAttributeName)
                 .provider(AuthProvider.KAKAO)
+                .providerId(providerId) // ✅ 추가
                 .build();
     }
 
     /**
-     * 🔥 수정 완료: User 엔티티의 팩토리 메서드를 사용하도록 변경 및 providerId 전달
+     * User 엔티티의 팩토리 메서드를 사용하도록 변경 및 providerId 전달
      */
     public User toEntity() {
-        // nameAttributeKey에 해당하는 실제 값 (Google의 'sub' 등)을 providerId로 사용합니다.
-        String actualProviderId = String.valueOf(this.getAttributes().get(this.getNameAttributeKey()));
 
+        // toEntity 로직은 이미 providerId 필드를 가지고 있으므로 로직은 단순화됩니다.
         return User.createSocialUser(
                 email,
                 name,
                 picture,
                 provider,
-                actualProviderId // ✅ 소셜 서비스의 고유 ID(providerId)를 전달합니다.
+                this.providerId // ✅ 필드에 저장된 providerId 사용
         );
     }
 }
