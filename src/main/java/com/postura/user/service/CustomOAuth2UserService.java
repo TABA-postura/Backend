@@ -46,7 +46,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         Map<String, Object> attributes = oAuth2User.getAttributes();
         OAuth2Attributes oAuth2Attributes = OAuth2Attributes.of(registrationId, userNameAttributeName, attributes);
 
-        // 4. DB에 사용자 저장/업데이트 (충돌 해결 완료)
+        // 4. DB에 사용자 저장/업데이트
         User user = saveOrUpdate(oAuth2Attributes);
 
         // 🔥🔥 최종 확인 로그: DB 저장 성공 여부를 확인하는 결정적인 로그
@@ -58,13 +58,14 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
                 Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey())),
                 oAuth2Attributes.getAttributes(),
 
-                // 🚨 수정된 부분 (매우 중요):
-                // Spring Security의 Principal Name(Authentication.getName())으로
-                // DB의 Long ID를 문자열로 전달합니다. 이 ID는 Long.valueOf() 변환이 가능합니다.
-                user.getId().toString(),
+                // 3번째 인자: nameAttributeKey ('sub', 'id' 등)
+                oAuth2Attributes.getNameAttributeKey(),
 
+                // 4번째 인자: email
                 user.getEmail(),
-                oAuth2Attributes.getNameAttributeKey()
+
+                // 5번째 인자: dbIdString (DB ID) ⭐ Long.valueOf()를 성공시킬 값
+                user.getId().toString()
         );
     }
 
