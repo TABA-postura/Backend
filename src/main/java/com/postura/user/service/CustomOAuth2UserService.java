@@ -46,8 +46,12 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         Map<String, Object> attributes = oAuth2User.getAttributes();
         OAuth2Attributes oAuth2Attributes = OAuth2Attributes.of(registrationId, userNameAttributeName, attributes);
 
-        // 4. DB에 사용자 저장/업데이트 (수정: 메서드 호출)
-        User user = saveOrUpdate(oAuth2Attributes); // <--- DB 저장 메서드 호출
+        // 4. DB에 사용자 저장/업데이트 (충돌 해결 완료)
+        User user = saveOrUpdate(oAuth2Attributes);
+
+        // 🔥🔥 최종 확인 로그: DB 저장 성공 여부를 확인하는 결정적인 로그
+        log.info("✅ DB 저장 완료: Provider={} | Email={} | UserID={}",
+                registrationId, user.getEmail(), user.getId());
 
         // 5. Spring Security CustomOAuth2User 객체 생성 및 반환
         return new CustomOAuth2User(
@@ -64,9 +68,13 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
      */
     private User saveOrUpdate(OAuth2Attributes attributes) {
 
-        // 이메일과 Provider를 기반으로 사용자 조회
+        // 이메일을 기반으로 사용자 조회
         User user = userRepository.findByEmail(attributes.getEmail())
-                .map(entity -> entity.update(attributes.getName(), attributes.getPicture())) // 기존 사용자면 업데이트
+                // ✅ 기존 사용자면 update 메서드에 provider 및 providerId를 추가로 전달
+                .map(entity -> entity.update(attributes.getName(),
+                        attributes.getPicture(),
+                        attributes.getProvider(),      // AuthProvider 전달
+                        attributes.getProviderId()))   // ProviderId 전달
                 .orElse(attributes.toEntity()); // 새 사용자면 엔티티 생성
 
         User savedUser = userRepository.save(user); // DB에 저장/업데이트
