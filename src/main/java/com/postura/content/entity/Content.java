@@ -26,7 +26,7 @@ public class Content {
     private String contentText; // 상세 텍스트
 
     @Column(name = "s3_image_url", length = 255)
-    private String s3ImageUrl; // 이미지 url
+    private String ImageUrl; // 이미지 url
 
     @Column(name = "related_part", length = 100)
     private String relatedPart; // ex. 목, 어깨
@@ -43,7 +43,7 @@ public class Content {
         this.title = title;
         this.category = category;
         this.contentText = contentText;
-        this.s3ImageUrl = s3ImageUrl;
+        this.ImageUrl = s3ImageUrl;
         this.relatedPart = relatedPosture;
     }
 }
