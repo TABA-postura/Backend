@@ -23,7 +23,6 @@ import java.util.Map;
 public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 
     private final UserRepository userRepository;
-    // ⚠️ UserRepository는 반드시 com.postura.user.repository에 있어야 합니다.
 
     /**
      * OAuth2 제공자로부터 받은 사용자 정보를 처리합니다.
@@ -45,12 +44,8 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         Map<String, Object> attributes = oAuth2User.getAttributes();
         OAuth2Attributes oAuth2Attributes = OAuth2Attributes.of(registrationId, userNameAttributeName, attributes);
 
-        // 4. DB에 사용자 저장/업데이트
-        User user = saveOrUpdate(oAuth2Attributes);
-
-        // 🔥🔥 추가할 로그: DB 저장 성공 여부를 확인하는 결정적인 로그
-        log.info("✅ DB 저장 완료: Provider={} | Email={} | UserID={}",
-                registrationId, user.getEmail(), user.getId());
+        // 4. DB에 사용자 저장/업데이트 (수정: 메서드 호출)
+        User user = saveOrUpdate(oAuth2Attributes); // <--- DB 저장 메서드 호출
 
         // 5. Spring Security CustomOAuth2User 객체 생성 및 반환
         return new CustomOAuth2User(
@@ -72,6 +67,11 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
                 .map(entity -> entity.update(attributes.getName(), attributes.getPicture())) // 기존 사용자면 업데이트
                 .orElse(attributes.toEntity()); // 새 사용자면 엔티티 생성
 
-        return userRepository.save(user); // DB에 저장/업데이트
+        User savedUser = userRepository.save(user); // DB에 저장/업데이트
+
+        // 🔥🔥🔥 최종 확인 로그: DB에 저장된 최종 사용자 정보 확인
+        log.info("📢 SAVE 성공 직후 확인: User Entity ID: {}", savedUser.getId());
+
+        return savedUser; // DB에서 저장된 User 객체 반환
     }
 }
