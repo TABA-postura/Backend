@@ -1,52 +1,48 @@
 package com.postura.user.domain;
 
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.core.user.OAuth2User; // ⭐ 인터페이스만 구현
 import lombok.Getter;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+
+import java.io.Serial;
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 
 @Getter
-// ⭐⭐⭐ DefaultOAuth2User 상속을 제거하고, OAuth2User 인터페이스만 구현합니다. ⭐⭐⭐
-public class CustomOAuth2User implements OAuth2User {
+public class CustomOAuth2User implements OAuth2User, Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
 
     private final Map<String, Object> attributes;
     private final Collection<? extends GrantedAuthority> authorities;
     private final String email;
-    private final String dbIdString; // DB ID (Principal Name으로 사용될 값)
+
+    /**
+     * DB PK(Long)의 String 표현.
+     * - OAuth2 성공 후 principal.getName()으로 userId를 얻기 위해 사용
+     */
+    private final String dbIdString;
 
     public CustomOAuth2User(
             Collection<? extends GrantedAuthority> authorities,
             Map<String, Object> attributes,
-            String nameAttributeKey, // 이 인자는 CustomOAuth2User 내부에서 무시됩니다.
             String email,
-            String dbIdString) {
-
-        this.authorities = authorities;
-        this.attributes = attributes;
-        this.email = email;
-        this.dbIdString = dbIdString; // ⭐ 우리가 원하는 DB ID (문자열)를 저장
-
-        // super(...) 호출이 없어졌으므로, Google ID 주입 문제가 사라집니다.
+            String dbIdString
+    ) {
+        this.authorities = Objects.requireNonNull(authorities, "authorities must not be null");
+        this.attributes = Objects.requireNonNull(attributes, "attributes must not be null");
+        this.email = Objects.requireNonNull(email, "email must not be null");
+        this.dbIdString = Objects.requireNonNull(dbIdString, "dbIdString must not be null");
     }
 
-    // ⭐ 핵심 구현: JWT 발급 시 사용될 DB ID (Principal Name)를 강제적으로 반환합니다.
+    /**
+     * principal.getName()이 DB userId(String)을 반환하도록 강제
+     */
     @Override
     public String getName() {
         return this.dbIdString;
     }
-
-    // ⭐ 필수 구현: 권한 정보를 반환합니다.
-    @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
-        return this.authorities;
-    }
-
-    // ⭐ 필수 구현: Attributes (사용자 정보 Map)를 반환합니다.
-    @Override
-    public Map<String, Object> getAttributes() {
-        return this.attributes;
-    }
-
-    // getEmail()은 @Getter가 자동으로 생성합니다.
 }

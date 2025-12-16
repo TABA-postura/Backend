@@ -1,6 +1,11 @@
 package com.postura.auth.filter;
 
 import com.postura.auth.service.JwtTokenProvider;
+import io.jsonwebtoken.JwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -8,10 +13,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 @Slf4j
@@ -19,8 +20,22 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
+
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+
+    /**
+     * 공개 엔드포인트는 JWT 필터 자체를 적용하지 않도록 제외
+     */
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Preflight 요청은 무조건 제외
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+        String path = request.getRequestURI();
+        return isPublicEndpoint(path);
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -28,55 +43,68 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String path = request.getRequestURI();
-
-        // 🔹 Preflight 요청은 바로 통과
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        // 🔹 인증이 필요 없는 엔드포인트는 JWT 검사 없이 통과
-        if (isPublicEndpoint(path)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
         try {
-            // 🔹 Authorization 헤더에서 JWT 추출
             String token = resolveToken(request);
 
             if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
-                Authentication authentication = jwtTokenProvider.getAuthentication(token);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                try {
+                    // AccessToken이면 Authentication 생성 성공
+                    Authentication authentication = jwtTokenProvider.getAuthentication(token);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    log.debug("JWT 인증 성공 | user='{}' | path={}", authentication.getName(), request.getRequestURI());
 
-                log.debug("🔐 JWT 인증 성공 — user='{}'", authentication.getName());
+                } catch (JwtException e) {
+                    // RefreshToken(auth 없음) 등이 Authorization에 들어온 경우가 대표적
+                    // 에러로 취급하지 않고 인증 미설정 상태로 진행
+                    SecurityContextHolder.clearContext();
+                    log.debug("JWT Authentication 생성 불가(AccessToken 아님/권한 없음) | path={} | msg={}",
+                            request.getRequestURI(), e.getMessage());
+                }
             } else {
-                // 토큰이 없거나 유효하지 않더라도 예외를 발생시키지 않고 필터 체인을 진행 (다음 필터에게 인가를 맡김)
-                log.debug("❌ JWT 토큰 없음 또는 검증 실패 — path={}", path);
+                log.debug("JWT 토큰 없음 또는 검증 실패 | path={}", request.getRequestURI());
             }
 
         } catch (Exception ex) {
-            log.error("JWT 인증 중 오류 발생: {}", ex.getMessage());
-
-            // 🔥 수정: 강제 401 응답 로직을 제거했습니다!
-            // OAuth2 성공 응답이 이 로직 때문에 막혔습니다.
-            // 인증 실패 시의 최종 401 처리는 SecurityConfig의 exceptionHandling에 맡깁니다.
+            // 어떤 예외든 인증 컨텍스트는 제거하고 체인 계속 진행
+            SecurityContextHolder.clearContext();
+            log.warn("JWT 필터 처리 중 예외 발생 | path={} | msg={}", request.getRequestURI(), ex.getMessage());
         }
 
         filterChain.doFilter(request, response);
     }
 
     /**
-     * 인증이 필요 없는 공개 API 목록 (OAuth2 콜백 경로 추가)
+     * 공개 API/리소스 목록
+     * - SecurityConfig의 permitAll과 최대한 정합 맞추는 게 중요합니다.
      */
     private boolean isPublicEndpoint(String path) {
-        return path.startsWith("/api/auth/login") ||
-                path.startsWith("/api/auth/signup") ||
-                path.startsWith("/api/auth/reissue") ||
-                path.startsWith("/swagger") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/login/oauth2/code"); // ✅ 수정: OAuth2 콜백 경로 추가
+        return
+                // Auth API
+                path.startsWith("/api/auth/") ||
+
+                        // (프로젝트에서 별도로 쓰는 signup 경로 대비)
+                        path.startsWith("/api/user/signup") ||
+
+                        // OAuth2 시작/콜백
+                        path.startsWith("/oauth2/") ||
+                        path.startsWith("/login/oauth2/") ||
+
+                        // Spring error
+                        path.startsWith("/error") ||
+
+                        // Health
+                        path.startsWith("/health") ||
+
+                        // Swagger
+                        path.startsWith("/swagger-ui") ||
+                        path.startsWith("/swagger-resources") ||
+                        path.startsWith("/v3/api-docs") ||
+
+                        // Content/Static
+                        path.startsWith("/api/content/") ||
+                        path.startsWith("/videos/") ||
+                        path.startsWith("/photo/") ||
+                        path.startsWith("/static/");
     }
 
     /**
@@ -84,12 +112,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */
     private String resolveToken(HttpServletRequest request) {
         String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
-
-        if (StringUtils.hasText(bearerToken) &&
-                bearerToken.startsWith(BEARER_PREFIX)) {
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
             return bearerToken.substring(BEARER_PREFIX.length());
         }
-
         return null;
     }
 }

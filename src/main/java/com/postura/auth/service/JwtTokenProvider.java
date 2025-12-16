@@ -1,8 +1,9 @@
 package com.postura.auth.service;
 
+import com.postura.config.JwtProperties;
+import com.postura.dto.auth.TokenResponse;
 import com.postura.user.entity.User;
 import com.postura.user.service.CustomUserDetails;
-import com.postura.dto.auth.TokenResponse;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
@@ -11,66 +12,81 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.*;
 import java.util.stream.Collectors;
-
-// Configuration Properties 클래스 임포트
-import com.postura.config.JwtProperties;
 
 @Slf4j
 @Component
 public class JwtTokenProvider {
 
     private static final String AUTHORITIES_KEY = "auth";
-    // 시간 오차(Clock Skew) 허용 시간 설정 (5초는 일반적인 허용치입니다.)
+    private static final String USER_ID_KEY = "userId";
+
+    // 시간 오차(Clock Skew) 허용 시간 설정 (5초는 일반적인 허용치)
     private static final long ALLOWED_CLOCK_SKEW_SECONDS = 5;
 
     private final Key key;
     private final long accessTokenValidityInMilliseconds;
     private final long refreshTokenValidityInMilliseconds;
 
-    // 🔥 JwtProperties 주입 생성자 (PlaceholderResolutionException 해결)
     public JwtTokenProvider(JwtProperties jwtProperties) {
-
         String secretKey = jwtProperties.getSecret();
         byte[] keyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
 
         this.key = Keys.hmacShaKeyFor(keyBytes);
-
         this.accessTokenValidityInMilliseconds = jwtProperties.getAccessTokenExpirationInMilliseconds();
         this.refreshTokenValidityInMilliseconds = jwtProperties.getRefreshTokenExpirationInMilliseconds();
     }
 
     /**
-     * AccessToken + RefreshToken 생성 (일반 로그인용)
+     * AccessToken + RefreshToken 생성 (LOCAL + OAuth2 공용)
+     *
+     * AccessToken:
+     * - sub(subject) = email (통일)
+     * - auth = ROLE_...
+     * - userId = String(Long)
+     *
+     * RefreshToken:
+     * - userId = String(Long)
+     * - auth 없음
      */
     public TokenResponse generateToken(Authentication authentication) {
-        String authorities = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.joining(","));
-
         long now = System.currentTimeMillis();
         Date accessExpiration = new Date(now + accessTokenValidityInMilliseconds);
         Date refreshExpiration = new Date(now + refreshTokenValidityInMilliseconds);
 
-        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
-        Long userId = userDetails.getUserId();
+        // 1) userId, email 추출 (LOCAL + OAuth2 모두 지원)
+        Long userId = extractUserId(authentication);
+        String email = extractEmail(authentication);
 
-        // Access Token 생성
+        // 2) 권한 문자열
+        String authorities = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(a -> a != null && !a.isBlank())
+                .collect(Collectors.joining(","));
+
+        // 방어: 권한이 비어있으면 ROLE_USER로 fallback (대부분의 서비스에서 기본권한)
+        if (authorities.isBlank()) {
+            authorities = "ROLE_USER";
+        }
+
+        // 3) Access Token 생성 (email을 subject로 통일)
         String accessToken = Jwts.builder()
-                .setSubject(authentication.getName())       // email
+                .setSubject(email) // ✅ 통일: email
                 .claim(AUTHORITIES_KEY, authorities)
-                .claim("userId", String.valueOf(userId)) // ✅ 수정: String으로 변환하여 저장 (타입 통일)
+                .claim(USER_ID_KEY, String.valueOf(userId)) // ✅ String 통일
                 .setExpiration(accessExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
 
-        // Refresh Token 생성 (auth 없음)
+        // 4) Refresh Token 생성 (auth 없음)
         String refreshToken = Jwts.builder()
-                .claim("userId", String.valueOf(userId)) // ✅ 수정: String으로 변환하여 저장 (타입 통일)
+                .claim(USER_ID_KEY, String.valueOf(userId)) // ✅ String 통일
                 .setExpiration(refreshExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
@@ -81,42 +97,24 @@ public class JwtTokenProvider {
                 .build();
     }
 
-    // =========================================================================
-    // OAuth2AuthenticationSuccessHandler에서 사용할 메서드 추가
-    // =========================================================================
-
     /**
-     * Access Token을 생성합니다. (OAuth2용)
+     * (레거시) OAuth2용 AccessToken 생성 메서드
+     * - 현재 권장안에서는 사용하지 않습니다.
+     * - OAuth2 성공 시에도 generateToken(authentication)을 사용하도록 SuccessHandler를 수정할 예정입니다.
      */
+    @Deprecated
     public String createAccessToken(String userId) {
-        long now = System.currentTimeMillis();
-        Date accessExpiration = new Date(now + accessTokenValidityInMilliseconds);
-
-        // Access Token 생성
-        return Jwts.builder()
-                .setSubject(userId)
-                .claim("userId", userId) // userId는 이미 String
-                .setExpiration(accessExpiration)
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+        throw new UnsupportedOperationException("createAccessToken(userId)는 더 이상 사용하지 않습니다. generateToken(authentication)을 사용하세요.");
     }
 
     /**
-     * Refresh Token을 생성합니다. (OAuth2용)
+     * (레거시) OAuth2용 RefreshToken 생성 메서드
+     * - 현재 권장안에서는 사용하지 않습니다.
      */
+    @Deprecated
     public String createRefreshToken(String userId) {
-        long now = System.currentTimeMillis();
-        Date refreshExpiration = new Date(now + refreshTokenValidityInMilliseconds);
-
-        // Refresh Token 생성 (userId 클레임만 사용)
-        return Jwts.builder()
-                .claim("userId", userId) // userId는 이미 String
-                .setExpiration(refreshExpiration)
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+        throw new UnsupportedOperationException("createRefreshToken(userId)는 더 이상 사용하지 않습니다. generateToken(authentication)을 사용하세요.");
     }
-
-    // =========================================================================
 
     /**
      * Authorization 헤더에서 Bearer 토큰만 추출
@@ -134,7 +132,6 @@ public class JwtTokenProvider {
     public Claims getClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
-                // 🔥 Clock Skew 허용 설정 추가 (ExpiredJwtException 해결)
                 .setAllowedClockSkewSeconds(ALLOWED_CLOCK_SKEW_SECONDS)
                 .build()
                 .parseClaimsJws(token)
@@ -142,7 +139,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * AccessToken 또는 RefreshToken에서 Authentication 생성
+     * AccessToken에서 Authentication 생성
      */
     public Authentication getAuthentication(String token) {
         Claims claims = getClaims(token);
@@ -151,43 +148,56 @@ public class JwtTokenProvider {
 
     /**
      * Claims 기반 Authentication 생성
-     * (RefreshToken에는 auth가 없기 때문에 null 대비 처리 포함)
+     *
+     * 보안상 원칙:
+     * - Authorization Bearer로 들어오는 토큰은 "AccessToken"이어야 함
+     * - 따라서 auth 클레임이 없거나 비어있으면(=RefreshToken) 인증을 만들지 않도록 실패 처리
      */
     public Authentication getAuthenticationFromClaims(Claims claims, String token) {
 
-        // 🚨 수정: OAuth2 토큰 생성 시 String으로 저장된 userId 클레임을 String으로 읽고, Long으로 변환
-        String userIdString = claims.get("userId", String.class);
-        Long userId = null;
-
-        if (userIdString != null) {
-            try {
-                // String을 Long으로 변환 (DB ID 타입에 맞춤)
-                userId = Long.valueOf(userIdString);
-            } catch (NumberFormatException e) {
-                log.error("JWT userId 클레임 변환 오류: String '{}' to Long 실패", userIdString);
-                // 변환 실패 시 예외를 던지거나, 인증 실패로 처리 (여기서는 런타임 예외로 처리)
-                throw new JwtException("Invalid user ID format in token: " + userIdString);
-            }
+        // 1) userId 추출 (String -> Long)
+        String userIdString = claims.get(USER_ID_KEY, String.class);
+        if (userIdString == null || userIdString.isBlank()) {
+            throw new JwtException("JWT에 'userId' 클레임이 누락되었습니다.");
         }
 
-        // 권한이 있을 수도 있고 없을 수도 있음
-        Collection<? extends GrantedAuthority> authorities = new ArrayList<>();
-        User.Role userRole = User.Role.USER;
-
-        if (claims.get(AUTHORITIES_KEY) != null) {
-            authorities = Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(","))
-                    .map(SimpleGrantedAuthority::new)
-                    .collect(Collectors.toList());
+        Long userId;
+        try {
+            userId = Long.valueOf(userIdString);
+        } catch (NumberFormatException e) {
+            log.error("JWT userId 클레임 변환 오류: String '{}' to Long 실패", userIdString);
+            throw new JwtException("Invalid user ID format in token: " + userIdString);
         }
 
-        // UserDetails 생성
+        // 2) 권한(auth) 추출 (없으면 RefreshToken이므로 실패)
+        String auth = claims.get(AUTHORITIES_KEY, String.class);
+        if (auth == null || auth.isBlank()) {
+            throw new JwtException("권한(auth) 클레임이 없습니다. AccessToken이 아닐 가능성이 큽니다.");
+        }
+
+        Collection<? extends GrantedAuthority> authorities = Arrays.stream(auth.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+
+        // 3) principal(UserDetails) 구성
+        // subject는 email로 통일되어 있어야 함
+        String email = claims.getSubject();
+        if (email == null || email.isBlank()) {
+            // subject가 없으면 인증 컨텍스트에서 email을 쓰는 기능이 깨질 수 있으므로 방어
+            email = "unknown";
+        }
+
+        User.Role userRole = User.Role.USER; // principal 생성용 최소값(실제 인가는 authorities로 판단)
+
         CustomUserDetails principal = new CustomUserDetails(
-                com.postura.user.entity.User.builder()
+                User.builder()
                         .id(userId)
-                        .email(claims.getSubject())    // AccessToken일 때만 접근 가능
-                        .passwordHash("")              // 필요 없음
-                        .name("N/A")                   // 필요 없음
-                        .role(userRole)                    // AccessToken에서만 권한 의미 있음
+                        .email(email)
+                        .passwordHash("")  // 필요 없음
+                        .name("N/A")       // 필요 없음
+                        .role(userRole)
                         .build()
         );
 
@@ -201,7 +211,6 @@ public class JwtTokenProvider {
         try {
             Jwts.parserBuilder()
                     .setSigningKey(key)
-                    // 🔥 Clock Skew 허용 설정 추가 (ExpiredJwtException 해결)
                     .setAllowedClockSkewSeconds(ALLOWED_CLOCK_SKEW_SECONDS)
                     .build()
                     .parseClaimsJws(token);
@@ -216,7 +225,7 @@ public class JwtTokenProvider {
         } catch (IllegalArgumentException e) {
             log.info("JWT 토큰이 비어 있습니다: {}", e.getMessage());
         } catch (JwtException e) {
-            log.info("JWT 처리 중 오류 발생: {}", e.getMessage()); // 추가된 RuntimeException 처리
+            log.info("JWT 처리 중 오류 발생: {}", e.getMessage());
         }
         return false;
     }
@@ -226,5 +235,88 @@ public class JwtTokenProvider {
      */
     public long getRefreshTokenExpirationInMilliseconds() {
         return refreshTokenValidityInMilliseconds;
+    }
+
+    // ===========================
+    // 내부 헬퍼
+    // ===========================
+
+    private Long extractUserId(Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+
+        // LOCAL
+        if (principal instanceof CustomUserDetails cud) {
+            return cud.getUserId();
+        }
+
+        // OAuth2 (CustomOAuth2User가 OAuth2User를 구현하는 경우가 대부분)
+        if (principal instanceof OAuth2User oAuth2User) {
+            // 1) name이 DB userId(String)인 케이스 대응
+            Long fromName = parseLongOrNull(oAuth2User.getName());
+            if (fromName != null) return fromName;
+
+            // 2) attributes에서 흔히 쓰는 키들 탐색
+            Map<String, Object> attrs = oAuth2User.getAttributes();
+            for (String key : List.of("userId", "id", "dbId")) {
+                Object v = attrs.get(key);
+                if (v != null) {
+                    Long parsed = parseLongOrNull(String.valueOf(v));
+                    if (parsed != null) return parsed;
+                }
+            }
+        }
+
+        throw new RuntimeException("토큰 발급을 위한 userId 추출 실패: principal 타입=" + principal.getClass());
+    }
+
+    private String extractEmail(Authentication authentication) {
+        Object principal = authentication.getPrincipal();
+
+        // LOCAL
+        if (principal instanceof CustomUserDetails cud) {
+            return cud.getUsername(); // email
+        }
+
+        // 1) CustomOAuth2User에 getEmail()이 있는 케이스(리플렉션)
+        String viaGetter = tryInvokeStringGetter(principal, "getEmail");
+        if (viaGetter != null && !viaGetter.isBlank()) {
+            return viaGetter;
+        }
+
+        // 2) OAuth2User attributes에서 email 키 탐색
+        if (principal instanceof OAuth2User oAuth2User) {
+            String email = oAuth2User.getAttribute("email");
+            if (email != null && !email.isBlank()) return email;
+
+            // 일부 공급자/매핑에서 다른 키를 쓰는 경우 대비(프로젝트 매핑에 맞게 추후 확장 가능)
+            Object v = oAuth2User.getAttributes().get("email");
+            if (v != null && !String.valueOf(v).isBlank()) return String.valueOf(v);
+        }
+
+        // 3) 마지막 fallback (일관성은 떨어질 수 있음)
+        String name = authentication.getName();
+        if (name != null && !name.isBlank()) return name;
+
+        throw new RuntimeException("토큰 발급을 위한 email 추출 실패: principal 타입=" + principal.getClass());
+    }
+
+    private Long parseLongOrNull(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String tryInvokeStringGetter(Object target, String methodName) {
+        try {
+            Method m = target.getClass().getMethod(methodName);
+            Object v = m.invoke(target);
+            if (v instanceof String s) return s;
+        } catch (Exception ignore) {
+            // ignore
+        }
+        return null;
     }
 }

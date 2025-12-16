@@ -43,7 +43,7 @@ public class User extends BaseTimeEntity {
     private String providerId;
 
     /**
-     * 🔥 Role enum
+     * Role enum
      */
     @RequiredArgsConstructor
     @Getter
@@ -55,7 +55,7 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * 🔥 AuthProvider enum (LOCAL 추가)
+     * AuthProvider enum
      */
     public enum AuthProvider {
         LOCAL,
@@ -96,16 +96,27 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * CustomOAuth2UserService에서 호출되는 업데이트 메서드
-     * 🔥 수정: 소셜 로그인으로 업데이트 시 Provider 정보를 명시적으로 받아서 업데이트
+     * OAuth2 로그인 시 사용자 프로필 업데이트
+     *
+     * 정책:
+     * - provider는 "자동 전환"하지 않습니다. (LOCAL -> GOOGLE/KAKAO 금지)
+     * - 같은 provider인 경우에만 providerId 갱신을 허용합니다.
+     * - provider 혼합은 CustomOAuth2UserService에서 차단하는 것이 기본이며,
+     *   엔티티에서도 방어적으로 금지합니다.
      */
     public User update(String name, String picture, AuthProvider provider, String providerId) {
         this.name = name;
         this.picture = picture;
 
-        // 🔥 중요: 기존 LOCAL 유저가 소셜 로그인할 경우, Provider와 ProviderId를 업데이트하여 DB 제약 조건을 맞춥니다.
-        if (this.provider == AuthProvider.LOCAL) {
-            this.provider = provider;
+        // provider 불일치 방어 (LOCAL <-> SOCIAL, GOOGLE <-> KAKAO 등)
+        if (this.provider != null && provider != null && this.provider != provider) {
+            throw new IllegalStateException(
+                    "Provider mismatch: existing=" + this.provider + ", request=" + provider
+            );
+        }
+
+        // 같은 provider일 때만 providerId 업데이트(소셜의 경우 보통 갱신/유지)
+        if (providerId != null && !providerId.isBlank()) {
             this.providerId = providerId;
         }
 

@@ -7,6 +7,7 @@ import com.postura.dto.auth.TokenResponse;
 import com.postura.user.entity.User;
 import com.postura.user.entity.User.AuthProvider;
 import com.postura.user.repository.UserRepository;
+import com.postura.user.service.CustomUserDetails;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import lombok.RequiredArgsConstructor;
@@ -59,23 +60,8 @@ public class AuthService {
         TokenResponse tokenResponse =
                 jwtTokenProvider.generateToken(authentication);
 
-        // 3. AccessToken에서 userId 추출 (🚨 수정된 부분 시작)
-        Claims claims = jwtTokenProvider.getClaims(tokenResponse.getAccessToken());
-
-        // String으로 추출 후 Long으로 변환 (JwtTokenProvider에서 String으로 저장했으므로)
-        String userIdString = claims.get("userId", String.class);
-        if (userIdString == null) {
-            throw new RuntimeException("JWT에 'userId' 클레임이 누락되었습니다.");
-        }
-
-        Long userId;
-        try {
-            userId = Long.valueOf(userIdString);
-        } catch (NumberFormatException e) {
-            log.error("JWT userId 클레임 변환 오류: {}", userIdString);
-            throw new RuntimeException("JWT에 저장된 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
-        }
-        // 🚨 수정된 부분 끝
+        // 3. userId 추출: (권장) principal에서 추출 + (fallback) 토큰 클레임에서 추출
+        Long userId = extractUserId(authentication, tokenResponse);
 
         // 4. Refresh Token 저장/갱신 (Upsert)
         refreshTokenRepository.findById(userId)
@@ -94,32 +80,59 @@ public class AuthService {
     }
 
     /**
-     * Refresh Token 재발급
+     * Refresh Token 재발급 (옵션 A: RefreshToken -> userId -> DB조회 -> 권한 포함 Authentication 구성)
      */
     @Transactional
     public TokenResponse reissue(String requestRefreshToken) {
-        // ... (reissue 메서드는 userId를 추출하지 않으므로 변경 불필요)
 
         if (!jwtTokenProvider.validateToken(requestRefreshToken)) {
             throw new RuntimeException("유효하지 않은 Refresh Token입니다.");
         }
 
+        // DB에 저장된(현재 유효하다고 서버가 인정한) RefreshToken인지 확인
         RefreshToken storedRefreshToken =
                 refreshTokenRepository.findByToken(requestRefreshToken)
                         .orElseThrow(() -> new RuntimeException("서버에 존재하지 않는 Refresh Token입니다."));
 
-        Claims claims =
-                jwtTokenProvider.getClaims(requestRefreshToken);
+        // RefreshToken에서 userId 추출
+        Claims claims = jwtTokenProvider.getClaims(requestRefreshToken);
 
-        Authentication authentication =
-                jwtTokenProvider.getAuthenticationFromClaims(claims, requestRefreshToken);
+        String userIdString = claims.get("userId", String.class);
+        if (userIdString == null) {
+            throw new RuntimeException("RefreshToken에 'userId' 클레임이 누락되었습니다.");
+        }
 
+        Long userId;
+        try {
+            userId = Long.valueOf(userIdString);
+        } catch (NumberFormatException e) {
+            log.error("RefreshToken userId 클레임 변환 오류: {}", userIdString);
+            throw new RuntimeException("RefreshToken에 저장된 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
+        }
+
+        // (방어) 토큰으로 조회한 DB userId와 클레임 userId 일치 확인
+        if (!storedRefreshToken.getUserId().equals(userId)) {
+            throw new RuntimeException("RefreshToken userId 불일치: stored=" + storedRefreshToken.getUserId() + ", claims=" + userId);
+        }
+
+        // DB에서 사용자 조회 (권한 포함)
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다. userId=" + userId));
+
+        // 권한 포함 Authentication 구성
+        CustomUserDetails principal = new CustomUserDetails(user);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()
+        );
+
+        // 새 토큰 발급
         TokenResponse newTokenResponse =
                 jwtTokenProvider.generateToken(authentication);
 
+        // RefreshToken 로테이션(갱신)
         storedRefreshToken.updateToken(newTokenResponse.getRefreshToken());
 
-        log.info("토큰 재발급 완료 | userId={}", storedRefreshToken.getUserId());
+        log.info("토큰 재발급 완료 | userId={}", userId);
         return newTokenResponse;
     }
 
@@ -143,10 +156,8 @@ public class AuthService {
             log.warn("만료된 Access Token으로 로그아웃 시도");
         }
 
-        // 🚨 수정: String으로 추출 후 Long으로 변환
         String userIdString = claims.get("userId", String.class);
         if (userIdString == null) {
-            // userId가 없으면 로그아웃 처리를 중단하거나, 로그만 남김
             log.warn("로그아웃 토큰에 'userId' 클레임이 누락되어 Refresh Token을 삭제할 수 없습니다.");
             return;
         }
@@ -158,10 +169,36 @@ public class AuthService {
             log.error("로그아웃 토큰 userId 클레임 변환 오류: {}", userIdString);
             throw new RuntimeException("로그아웃 토큰에 저장된 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
         }
-        // 🚨 수정된 부분 끝
 
         refreshTokenRepository.deleteById(userId);
 
         log.info("로그아웃 완료 | userId={}", userId);
+    }
+
+    /**
+     * userId 추출 헬퍼: principal 우선, 실패 시 AccessToken claims fallback
+     */
+    private Long extractUserId(Authentication authentication, TokenResponse tokenResponse) {
+        try {
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof CustomUserDetails cud) {
+                return cud.getUserId();
+            }
+        } catch (Exception ignore) {
+            // fallback으로 넘어감
+        }
+
+        Claims claims = jwtTokenProvider.getClaims(tokenResponse.getAccessToken());
+        String userIdString = claims.get("userId", String.class);
+        if (userIdString == null) {
+            throw new RuntimeException("JWT에 'userId' 클레임이 누락되었습니다.");
+        }
+
+        try {
+            return Long.valueOf(userIdString);
+        } catch (NumberFormatException e) {
+            log.error("JWT userId 클레임 변환 오류: {}", userIdString);
+            throw new RuntimeException("JWT에 저장된 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
+        }
     }
 }

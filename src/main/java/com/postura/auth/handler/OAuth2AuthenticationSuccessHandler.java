@@ -6,6 +6,7 @@ import com.postura.auth.service.JwtTokenProvider;
 import com.postura.config.properties.AppProperties;
 import com.postura.dto.auth.TokenResponse;
 import com.postura.user.domain.CustomOAuth2User;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,61 +32,98 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     @Transactional
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
-            throws IOException, ServletException {
+    public void onAuthenticationSuccess(HttpServletRequest request,
+                                        HttpServletResponse response,
+                                        Authentication authentication) throws IOException, ServletException {
 
-        // 1. 인증된 사용자 정보 획득 및 ID 추출
-        OAuth2User principal = (OAuth2User) authentication.getPrincipal();
-
-        // CustomOAuth2UserService에서 user.getId().toString()을 Principal Name으로 설정했다고 가정합니다.
-        String userIdString = principal.getName();
-
-        Long userId;
-        try {
-            // ⭐ 복구된 Long 변환 로직: 이제 DB의 Long ID 문자열이 넘어오므로 성공해야 합니다.
-            userId = Long.valueOf(userIdString);
-        } catch (NumberFormatException e) {
-            // 이 예외는 CustomOAuth2UserService에서 아직도 Google의 긴 ID를 반환하고 있음을 의미합니다.
-            log.error("DB Long ID 변환 오류. Principal Name: {}", userIdString);
-            throw new RuntimeException("DB Long ID 변환에 실패했습니다. CustomOAuth2UserService의 반환 값을 확인하십시오.", e);
-        }
-
-        // 2. JWT 토큰 생성 (AccessToken, RefreshToken 모두 생성)
+        // 1) (OAuth2 옵션 A) 공용 토큰 발급 로직 사용
         TokenResponse tokenResponse = tokenProvider.generateToken(authentication);
 
-        log.info("OAuth2 인증 성공. DB User ID: {}, Access Token 생성 완료", userId);
+        // 2) RefreshToken upsert를 위한 userId 확보
+        Long userId = extractUserId(authentication, tokenResponse);
 
-        // 3. ⭐ Refresh Token 저장/갱신 (Upsert) - Long userId 사용
+        // 3) Refresh Token 저장/갱신 (Upsert)
         refreshTokenRepository.findById(userId)
                 .ifPresentOrElse(
                         existing -> existing.updateToken(tokenResponse.getRefreshToken()),
                         () -> refreshTokenRepository.save(
                                 RefreshToken.builder()
-                                        .userId(userId) // Long ID 사용
+                                        .userId(userId)
                                         .token(tokenResponse.getRefreshToken())
                                         .build()
                         )
                 );
-        log.info("Refresh Token 저장/갱신 완료 | userId={}", userId);
 
+        log.info("OAuth2 인증 성공 | userId={} | RefreshToken 저장/갱신 완료", userId);
 
-        // 4. 리다이렉트 URL 생성
+        // 4) 최종 리다이렉트 URL 생성
         String targetUrl = determineTargetUrl(request, response, authentication);
 
         String redirectUri = UriComponentsBuilder.fromUriString(targetUrl)
                 .queryParam("accessToken", tokenResponse.getAccessToken())
                 .queryParam("refreshToken", tokenResponse.getRefreshToken())
-                .build().toUriString();
+                .build()
+                .toUriString();
 
-        // 5. 프론트엔드 URL로 리다이렉트
+        // 5) 인증 관련 임시 속성 정리
+        clearAuthenticationAttributes(request);
+
+        // 6) 프론트로 리다이렉트
         getRedirectStrategy().sendRedirect(request, response, redirectUri);
     }
 
     /**
-     * 최종 리다이렉트 URL (프론트엔드 주소)을 결정합니다.
+     * 최종 리다이렉트 URL(프론트엔드 주소) 결정
      */
     @Override
-    protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
+    protected String determineTargetUrl(HttpServletRequest request,
+                                        HttpServletResponse response,
+                                        Authentication authentication) {
         return appProperties.getOauth2().getAuthorizedRedirectUri();
+    }
+
+    /**
+     * OAuth2 로그인 성공 시 RefreshToken upsert에 필요한 userId를 안정적으로 추출
+     * - 1순위: CustomOAuth2User.getName() (CustomOAuth2UserService가 DB userId를 name으로 세팅했다는 전제)
+     * - 2순위: AccessToken claims의 userId
+     */
+    private Long extractUserId(Authentication authentication, TokenResponse tokenResponse) {
+        Object principal = authentication.getPrincipal();
+
+        // 1) CustomOAuth2User면 name이 DB userId(String)인 패턴 우선
+        if (principal instanceof CustomOAuth2User custom) {
+            Long parsed = parseLongOrThrow(custom.getName(), "CustomOAuth2User.getName()");
+            return parsed;
+        }
+
+        // 2) 일반 OAuth2User도 name에 userId를 넣는 경우가 있어 시도
+        if (principal instanceof OAuth2User oAuth2User) {
+            String name = oAuth2User.getName();
+            Long parsed = tryParseLong(name);
+            if (parsed != null) return parsed;
+        }
+
+        // 3) fallback: accessToken의 userId 클레임
+        Claims claims = tokenProvider.getClaims(tokenResponse.getAccessToken());
+        String userIdString = claims.get("userId", String.class);
+        return parseLongOrThrow(userIdString, "AccessToken.userId claim");
+    }
+
+    private Long parseLongOrThrow(String value, String source) {
+        Long parsed = tryParseLong(value);
+        if (parsed == null) {
+            log.error("userId Long 변환 실패 | source={} | value={}", source, value);
+            throw new RuntimeException("OAuth2 로그인 userId 파싱 실패: source=" + source + ", value=" + value);
+        }
+        return parsed;
+    }
+
+    private Long tryParseLong(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

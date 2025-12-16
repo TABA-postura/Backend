@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -36,58 +37,87 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate = new DefaultOAuth2UserService();
         OAuth2User oAuth2User = delegate.loadUser(userRequest);
 
-        // 1. 서비스 ID (google, kakao 등) 추출
+        // 1) 서비스 ID (google, kakao 등)
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
 
-        // 2. 사용자 정보의 고유 키 (Primary Key) 추출 (Google은 'sub', Kakao는 'id')
-        String userNameAttributeName = userRequest.getClientRegistration().getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
+        // 2) 사용자 정보의 고유 키 (Google: sub, Kakao: id)
+        String userNameAttributeName = userRequest.getClientRegistration()
+                .getProviderDetails()
+                .getUserInfoEndpoint()
+                .getUserNameAttributeName();
 
-        // 3. 사용자 정보 파싱 및 변환
+        // 3) 사용자 정보 파싱 및 변환
         Map<String, Object> attributes = oAuth2User.getAttributes();
-        OAuth2Attributes oAuth2Attributes = OAuth2Attributes.of(registrationId, userNameAttributeName, attributes);
+        OAuth2Attributes oAuth2Attributes =
+                OAuth2Attributes.of(registrationId, userNameAttributeName, attributes);
 
-        // 4. DB에 사용자 저장/업데이트
+        // 4) DB 저장/업데이트 (provider 충돌 방어 포함)
         User user = saveOrUpdate(oAuth2Attributes);
 
-        // 🔥🔥 최종 확인 로그: DB 저장 성공 여부를 확인하는 결정적인 로그
-        log.info("✅ DB 저장 완료: Provider={} | Email={} | DB UserID={}",
+        log.info("OAuth2 사용자 DB 저장 완료 | provider={} | email={} | userId={}",
                 registrationId, user.getEmail(), user.getId());
 
-        // 5. Spring Security CustomOAuth2User 객체 생성 및 반환
+        // 5) 권한 생성: ROLE_ prefix 보장
+        String roleKey = user.getRole() != null ? user.getRole().getKey() : "ROLE_USER";
+        if (roleKey != null && !roleKey.startsWith("ROLE_")) {
+            roleKey = "ROLE_" + roleKey;
+        }
+        if (roleKey == null || roleKey.isBlank()) {
+            roleKey = "ROLE_USER";
+        }
+
+        // 6) CustomOAuth2User 반환
+        // - getName()이 DB userId(String)을 반환하도록(생성자 마지막 인자) 유지
         return new CustomOAuth2User(
-                Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey())),
+                Collections.singleton(new SimpleGrantedAuthority(roleKey)),
                 oAuth2Attributes.getAttributes(),
-
-                // 3번째 인자: nameAttributeKey (이제 CustomOAuth2User 내부에서 사용되지 않습니다)
-                oAuth2Attributes.getNameAttributeKey(),
-
-                // 4번째 인자: email
                 user.getEmail(),
-
-                // 5번째 인자: dbIdString (DB ID) ⭐ Long.valueOf()를 성공시킬 값
-                user.getId().toString()
+                user.getId().toString() // ✅ DB Long ID String (JwtTokenProvider가 Long 변환)
         );
     }
 
     /**
      * DB에 사용자 정보가 있으면 업데이트하고, 없으면 새로 저장합니다.
+     *
+     * 중요: 동일 이메일로 provider가 섞이는 경우(LOCAL ↔ GOOGLE/KAKAO, GOOGLE ↔ KAKAO 등)
+     * 기존 계정을 덮어쓰면 로그인 체계가 깨질 수 있으므로 기본은 차단합니다.
      */
     private User saveOrUpdate(OAuth2Attributes attributes) {
 
-        // 이메일을 기반으로 사용자 조회
-        User user = userRepository.findByEmail(attributes.getEmail())
-                // ✅ 기존 사용자면 update 메서드에 provider 및 providerId를 추가로 전달
-                .map(entity -> entity.update(attributes.getName(),
-                        attributes.getPicture(),
-                        attributes.getProvider(),      // AuthProvider 전달
-                        attributes.getProviderId()))   // ProviderId 전달
-                .orElse(attributes.toEntity()); // 새 사용자면 엔티티 생성
+        Optional<User> existingOpt = userRepository.findByEmail(attributes.getEmail());
 
-        User savedUser = userRepository.save(user); // DB에 저장/업데이트
+        if (existingOpt.isPresent()) {
+            User existing = existingOpt.get();
 
-        // 🔥🔥🔥 최종 확인 로그: DB에 저장된 최종 사용자 정보 확인
-        log.info("📢 SAVE 성공 직후 확인: User Entity ID: {}", savedUser.getId());
+            // provider 충돌 방어
+            // - 기존이 LOCAL인데 소셜이 들어오거나
+            // - 기존이 GOOGLE인데 KAKAO가 들어오는 등
+            if (existing.getProvider() != null && attributes.getProvider() != null
+                    && existing.getProvider() != attributes.getProvider()) {
 
-        return savedUser; // DB에서 저장된 User 객체 반환
+                throw new RuntimeException(
+                        "이미 가입된 이메일입니다. 기존 로그인 방식(" + existing.getProvider() + ")으로 로그인해 주세요."
+                );
+            }
+
+            // 같은 provider면 업데이트
+            User updated = existing.update(
+                    attributes.getName(),
+                    attributes.getPicture(),
+                    attributes.getProvider(),
+                    attributes.getProviderId()
+            );
+
+            User savedUser = userRepository.save(updated);
+            log.info("OAuth2 사용자 업데이트 완료 | userId={}", savedUser.getId());
+            return savedUser;
+        }
+
+        // 신규 사용자면 생성
+        User user = attributes.toEntity();
+        User savedUser = userRepository.save(user);
+
+        log.info("OAuth2 신규 사용자 저장 완료 | userId={}", savedUser.getId());
+        return savedUser;
     }
 }
