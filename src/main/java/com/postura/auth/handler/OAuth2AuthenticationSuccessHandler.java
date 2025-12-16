@@ -1,10 +1,10 @@
 package com.postura.auth.handler;
 
-import com.postura.auth.domain.RefreshToken; // RefreshToken 엔티티 임포트
-import com.postura.auth.repository.RefreshTokenRepository; // RefreshTokenRepository 임포트
+import com.postura.auth.domain.RefreshToken;
+import com.postura.auth.repository.RefreshTokenRepository;
 import com.postura.auth.service.JwtTokenProvider;
 import com.postura.config.properties.AppProperties;
-import com.postura.dto.auth.TokenResponse; // TokenResponse DTO 임포트 (선택 사항이지만 유용)
+import com.postura.dto.auth.TokenResponse;
 import com.postura.user.domain.CustomOAuth2User;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,7 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional; // 트랜잭션 처리를 위해 임포트
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
@@ -27,9 +27,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
     private final JwtTokenProvider tokenProvider;
     private final AppProperties appProperties;
-    private final RefreshTokenRepository refreshTokenRepository; // ⭐ 추가: RefreshToken 저장소 주입
+    private final RefreshTokenRepository refreshTokenRepository;
 
-    @Transactional // ⭐ 추가: DB 저장 로직이 포함되므로 트랜잭션 필요
+    @Transactional
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws IOException, ServletException {
@@ -37,28 +37,31 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         // 1. 인증된 사용자 정보 획득 및 ID 추출
         OAuth2User principal = (OAuth2User) authentication.getPrincipal();
 
-        // CustomOAuth2User를 사용했다면 getName()이 userId(String)를 반환하도록 설정했을 가능성이 높음
+        // CustomOAuth2UserService에서 user.getId().toString()을 Principal Name으로 설정했다고 가정합니다.
         String userIdString = principal.getName();
+
         Long userId;
         try {
+            // ⭐ 복구된 Long 변환 로직: 이제 DB의 Long ID 문자열이 넘어오므로 성공해야 합니다.
             userId = Long.valueOf(userIdString);
         } catch (NumberFormatException e) {
-            log.error("OAuth2 사용자 ID 클레임 변환 오류: {}", userIdString);
-            throw new RuntimeException("OAuth2 인증 성공 후 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
+            // 이 예외는 CustomOAuth2UserService에서 아직도 Google의 긴 ID를 반환하고 있음을 의미합니다.
+            log.error("DB Long ID 변환 오류. Principal Name: {}", userIdString);
+            throw new RuntimeException("DB Long ID 변환에 실패했습니다. CustomOAuth2UserService의 반환 값을 확인하십시오.", e);
         }
 
         // 2. JWT 토큰 생성 (AccessToken, RefreshToken 모두 생성)
         TokenResponse tokenResponse = tokenProvider.generateToken(authentication);
 
-        log.info("OAuth2 인증 성공. 사용자 ID: {}, Access Token 생성 완료", userId);
+        log.info("OAuth2 인증 성공. DB User ID: {}, Access Token 생성 완료", userId);
 
-        // 3. ⭐ Refresh Token 저장/갱신 (Upsert) - AuthService.login 로직 재사용
+        // 3. ⭐ Refresh Token 저장/갱신 (Upsert) - Long userId 사용
         refreshTokenRepository.findById(userId)
                 .ifPresentOrElse(
                         existing -> existing.updateToken(tokenResponse.getRefreshToken()),
                         () -> refreshTokenRepository.save(
                                 RefreshToken.builder()
-                                        .userId(userId)
+                                        .userId(userId) // Long ID 사용
                                         .token(tokenResponse.getRefreshToken())
                                         .build()
                         )
@@ -83,7 +86,6 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
      */
     @Override
     protected String determineTargetUrl(HttpServletRequest request, HttpServletResponse response, Authentication authentication) {
-        // AppProperties에서 설정된 최종 프론트엔드 URI를 반환합니다.
         return appProperties.getOauth2().getAuthorizedRedirectUri();
     }
 }

@@ -50,16 +50,21 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         User user = saveOrUpdate(oAuth2Attributes);
 
         // 🔥🔥 최종 확인 로그: DB 저장 성공 여부를 확인하는 결정적인 로그
-        log.info("✅ DB 저장 완료: Provider={} | Email={} | UserID={}",
+        log.info("✅ DB 저장 완료: Provider={} | Email={} | DB UserID={}",
                 registrationId, user.getEmail(), user.getId());
 
         // 5. Spring Security CustomOAuth2User 객체 생성 및 반환
         return new CustomOAuth2User(
                 Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey())),
                 oAuth2Attributes.getAttributes(),
-                oAuth2Attributes.getNameAttributeKey(),
-                user.getEmail(), // CustomOAuth2User의 email
-                user.getId().toString() // CustomOAuth2User의 name (JWT Subject로 사용될 고유 ID)
+
+                // 🚨 수정된 부분 (매우 중요):
+                // Spring Security의 Principal Name(Authentication.getName())으로
+                // DB의 Long ID를 문자열로 전달합니다. 이 ID는 Long.valueOf() 변환이 가능합니다.
+                user.getId().toString(),
+
+                user.getEmail(),
+                oAuth2Attributes.getNameAttributeKey()
         );
     }
 
