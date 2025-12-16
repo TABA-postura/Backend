@@ -88,7 +88,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/swagger-resources/**", "/v3/api-docs/**").permitAll()
 
                         // 콘텐츠/정적 리소스
-                        .requestMatchers("/api/content/**", "/videos/**", "/photo/**", "/static/**").permitAll()
+                        .requestMatchers("/api/content/**", "/videos/**", "/photo/**", "/static/**","/images/**").permitAll()
 
                         // ✅ AI 서버가 호출하는 엔드포인트(토큰 없이 POST 허용)
                         .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
