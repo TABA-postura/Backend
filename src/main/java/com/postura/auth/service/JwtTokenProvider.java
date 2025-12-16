@@ -63,14 +63,14 @@ public class JwtTokenProvider {
         String accessToken = Jwts.builder()
                 .setSubject(authentication.getName())       // email
                 .claim(AUTHORITIES_KEY, authorities)
-                .claim("userId", userId)
+                .claim("userId", String.valueOf(userId)) // ✅ 수정: String으로 변환하여 저장 (타입 통일)
                 .setExpiration(accessExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
 
         // Refresh Token 생성 (auth 없음)
         String refreshToken = Jwts.builder()
-                .claim("userId", userId)
+                .claim("userId", String.valueOf(userId)) // ✅ 수정: String으로 변환하여 저장 (타입 통일)
                 .setExpiration(refreshExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
@@ -95,7 +95,7 @@ public class JwtTokenProvider {
         // Access Token 생성
         return Jwts.builder()
                 .setSubject(userId)
-                .claim("userId", userId) // userId는 String 타입으로 저장됨
+                .claim("userId", userId) // userId는 이미 String
                 .setExpiration(accessExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
@@ -110,7 +110,7 @@ public class JwtTokenProvider {
 
         // Refresh Token 생성 (userId 클레임만 사용)
         return Jwts.builder()
-                .claim("userId", userId)
+                .claim("userId", userId) // userId는 이미 String
                 .setExpiration(refreshExpiration)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
