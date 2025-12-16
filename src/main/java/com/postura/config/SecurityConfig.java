@@ -90,6 +90,9 @@ public class SecurityConfig {
                         // 콘텐츠/정적 리소스
                         .requestMatchers("/api/content/**", "/videos/**", "/photo/**", "/static/**").permitAll()
 
+                        // ✅ AI 서버가 호출하는 엔드포인트(토큰 없이 POST 허용)
+                        .requestMatchers(HttpMethod.POST, "/api/ai/log").permitAll()
+
                         // 모니터/리포트(인증 필요)
                         .requestMatchers("/monitor/**", "/api/monitor/**").authenticated()
                         .requestMatchers("/report/**", "/api/report/**").authenticated()
