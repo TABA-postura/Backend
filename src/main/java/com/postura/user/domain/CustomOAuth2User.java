@@ -1,40 +1,52 @@
 package com.postura.user.domain;
 
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
-import lombok.Getter; // ⭐ Lombok @Getter 임포트
+import org.springframework.security.oauth2.core.user.OAuth2User; // ⭐ 인터페이스만 구현
+import lombok.Getter;
 import java.util.Collection;
 import java.util.Map;
 
-@Getter // ⭐ Lombok @Getter 추가
-// Spring Security가 OAuth2 인증 후 사용하는 사용자 정보 클래스
-public class CustomOAuth2User extends DefaultOAuth2User {
+@Getter
+// ⭐⭐⭐ DefaultOAuth2User 상속을 제거하고, OAuth2User 인터페이스만 구현합니다. ⭐⭐⭐
+public class CustomOAuth2User implements OAuth2User {
 
+    private final Map<String, Object> attributes;
+    private final Collection<? extends GrantedAuthority> authorities;
     private final String email;
-    // ⭐ 필드명을 name 대신 dbIdString으로 변경하여 혼동 방지
-    private final String dbIdString;
+    private final String dbIdString; // DB ID (Principal Name으로 사용될 값)
 
     public CustomOAuth2User(
             Collection<? extends GrantedAuthority> authorities,
             Map<String, Object> attributes,
-            String nameAttributeKey, // 부모 클래스의 초기화를 위해 필요
+            String nameAttributeKey, // 이 인자는 CustomOAuth2User 내부에서 무시됩니다.
             String email,
-            String dbIdString) { // ⭐ DB ID를 받는 인자
+            String dbIdString) {
 
-        // 부모 클래스는 여전히 nameAttributeKey ('sub')를 사용해 초기화됩니다. (Google ID가 부모에 저장됨)
-        super(authorities, attributes, nameAttributeKey);
-
+        this.authorities = authorities;
+        this.attributes = attributes;
         this.email = email;
         this.dbIdString = dbIdString; // ⭐ 우리가 원하는 DB ID (문자열)를 저장
+
+        // super(...) 호출이 없어졌으므로, Google ID 주입 문제가 사라집니다.
     }
 
-    // ⭐ 핵심 수정: 부모의 동작(Google ID 반환)을 무시하고, 저장된 DB ID만을 강제적으로 반환합니다.
+    // ⭐ 핵심 구현: JWT 발급 시 사용될 DB ID (Principal Name)를 강제적으로 반환합니다.
     @Override
     public String getName() {
-        return dbIdString;
+        return this.dbIdString;
     }
 
-    // 🚨 Lombok @Getter를 사용하여 getEmail() 메서드를 수동으로 구현할 필요가 없습니다.
-    // 하지만 현재 구조를 유지하기 위해 @Getter만 남깁니다.
-    // public String getEmail() { return email; }
+    // ⭐ 필수 구현: 권한 정보를 반환합니다.
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return this.authorities;
+    }
+
+    // ⭐ 필수 구현: Attributes (사용자 정보 Map)를 반환합니다.
+    @Override
+    public Map<String, Object> getAttributes() {
+        return this.attributes;
+    }
+
+    // getEmail()은 @Getter가 자동으로 생성합니다.
 }

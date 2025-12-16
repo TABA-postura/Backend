@@ -58,7 +58,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
                 Collections.singleton(new SimpleGrantedAuthority(user.getRole().getKey())),
                 oAuth2Attributes.getAttributes(),
 
-                // 3번째 인자: nameAttributeKey ('sub', 'id' 등)
+                // 3번째 인자: nameAttributeKey (이제 CustomOAuth2User 내부에서 사용되지 않습니다)
                 oAuth2Attributes.getNameAttributeKey(),
 
                 // 4번째 인자: email
