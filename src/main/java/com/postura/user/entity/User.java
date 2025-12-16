@@ -24,7 +24,7 @@ public class User extends BaseTimeEntity {
     private String email;
 
     @Column(name = "password_hash", length = 255)
-    private String passwordHash;
+    private String passwordHash; // 이 필드가 DB에서 NOT NULL일 가능성이 높습니다.
 
     @Column(nullable = false)
     private String name;
@@ -108,6 +108,7 @@ public class User extends BaseTimeEntity {
 
     /**
      * 소셜 로그인 유저 생성용 팩토리 메서드
+     * 🔥 수정 완료: passwordHash에 빈 문자열 할당
      */
     public static User createSocialUser(
             String email,
@@ -118,6 +119,7 @@ public class User extends BaseTimeEntity {
     ) {
         return User.builder()
                 .email(email)
+                .passwordHash("") // ✅ 수정: DB NOT NULL 제약조건을 피하기 위해 빈 문자열 할당
                 .name(name)
                 .picture(picture)
                 .role(Role.USER)
