@@ -53,6 +53,14 @@ public class SecurityConfig {
                 // 3. CORS 설정 적용
                 .cors(Customizer.withDefaults())
 
+                // 🔥 3.5. HTTPS 채널 요구 강제 (ALB/CloudFront 환경 필수 설정)
+                .requiresChannel(channel -> channel
+                        // OAuth2 콜백 경로는 무조건 보안 채널(HTTPS) 요구
+                        .requestMatchers("/login/oauth2/code/**").requiresSecure()
+                        // 모든 요청을 HTTPS로 강제 (ALB 환경에서 리다이렉트 오류 방지)
+                        .anyRequest().requiresSecure()
+                )
+
                 // 4. 세션을 사용하지 않는 Stateless 기반 보안 설정
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -72,7 +80,7 @@ public class SecurityConfig {
                         // OAuth2 로그인 시작/콜백 경로 허용
                         .requestMatchers("/oauth2/**", "/login/oauth2/code/**").permitAll()
 
-                        // 🔥 수정: OAuth2 성공 후 토큰을 전달하는 최종 리다이렉트 URI를 permitAll에 추가
+                        // OAuth2 성공 후 토큰을 전달하는 최종 리다이렉트 URI를 permitAll에 추가
                         .requestMatchers("/oauth/redirect").permitAll()
 
                         // Swagger / API Docs 허용
