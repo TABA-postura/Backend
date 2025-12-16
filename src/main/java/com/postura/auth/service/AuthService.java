@@ -59,11 +59,23 @@ public class AuthService {
         TokenResponse tokenResponse =
                 jwtTokenProvider.generateToken(authentication);
 
-        // 3. AccessToken에서 userId 추출
-        Claims claims =
-                jwtTokenProvider.getClaims(tokenResponse.getAccessToken());
-        Long userId =
-                claims.get("userId", Long.class);
+        // 3. AccessToken에서 userId 추출 (🚨 수정된 부분 시작)
+        Claims claims = jwtTokenProvider.getClaims(tokenResponse.getAccessToken());
+
+        // String으로 추출 후 Long으로 변환 (JwtTokenProvider에서 String으로 저장했으므로)
+        String userIdString = claims.get("userId", String.class);
+        if (userIdString == null) {
+            throw new RuntimeException("JWT에 'userId' 클레임이 누락되었습니다.");
+        }
+
+        Long userId;
+        try {
+            userId = Long.valueOf(userIdString);
+        } catch (NumberFormatException e) {
+            log.error("JWT userId 클레임 변환 오류: {}", userIdString);
+            throw new RuntimeException("JWT에 저장된 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
+        }
+        // 🚨 수정된 부분 끝
 
         // 4. Refresh Token 저장/갱신 (Upsert)
         refreshTokenRepository.findById(userId)
@@ -86,6 +98,7 @@ public class AuthService {
      */
     @Transactional
     public TokenResponse reissue(String requestRefreshToken) {
+        // ... (reissue 메서드는 userId를 추출하지 않으므로 변경 불필요)
 
         if (!jwtTokenProvider.validateToken(requestRefreshToken)) {
             throw new RuntimeException("유효하지 않은 Refresh Token입니다.");
@@ -130,8 +143,22 @@ public class AuthService {
             log.warn("만료된 Access Token으로 로그아웃 시도");
         }
 
-        Long userId =
-                claims.get("userId", Long.class);
+        // 🚨 수정: String으로 추출 후 Long으로 변환
+        String userIdString = claims.get("userId", String.class);
+        if (userIdString == null) {
+            // userId가 없으면 로그아웃 처리를 중단하거나, 로그만 남김
+            log.warn("로그아웃 토큰에 'userId' 클레임이 누락되어 Refresh Token을 삭제할 수 없습니다.");
+            return;
+        }
+
+        Long userId;
+        try {
+            userId = Long.valueOf(userIdString);
+        } catch (NumberFormatException e) {
+            log.error("로그아웃 토큰 userId 클레임 변환 오류: {}", userIdString);
+            throw new RuntimeException("로그아웃 토큰에 저장된 사용자 ID 형식이 유효하지 않습니다: " + userIdString);
+        }
+        // 🚨 수정된 부분 끝
 
         refreshTokenRepository.deleteById(userId);
 
