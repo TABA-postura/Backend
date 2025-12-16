@@ -13,6 +13,6 @@ public class ContentDetailResponse {
     private String title;
     private String category;       // 카테고리
     private String contentText;    // 상세 텍스트
-    private String s3ImageUrl;     // S3 URL
+    private String imageUrl;     // S3 URL
     private String relatedPart;    // 연관된 자세
 }

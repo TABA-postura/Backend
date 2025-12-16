@@ -13,5 +13,5 @@ public class ContentListResponse {
     private String title;
     private String category;       // 카테고리
     private String relatedPart;    // 관련된 자세
-    private String s3ImageUrl;     // S3 이미지 URL
+    private String imageUrl;     // S3 이미지 URL
 }

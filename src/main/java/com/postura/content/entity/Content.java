@@ -25,8 +25,8 @@ public class Content {
     @Column(name = "content_text", columnDefinition = "TEXT", nullable = false)
     private String contentText; // 상세 텍스트
 
-    @Column(name = "s3_image_url", length = 255)
-    private String ImageUrl; // 이미지 url
+    @Column(name = "image_url", length = 255)
+    private String imageUrl; // 이미지 url
 
     @Column(name = "related_part", length = 100)
     private String relatedPart; // ex. 목, 어깨
@@ -37,13 +37,13 @@ public class Content {
     public void updateContent(String title,
                               String category,
                               String contentText,
-                              String s3ImageUrl,
+                              String imageUrl,
                               String relatedPosture) {
 
         this.title = title;
         this.category = category;
         this.contentText = contentText;
-        this.ImageUrl = s3ImageUrl;
+        this.imageUrl = imageUrl;
         this.relatedPart = relatedPosture;
     }
 }

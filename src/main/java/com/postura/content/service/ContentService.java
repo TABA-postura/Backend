@@ -49,7 +49,7 @@ public class ContentService {
                         .id(content.getGuideId())
                         .title(content.getTitle())
                         .category(content.getCategory())
-                        .s3ImageUrl(content.getImageUrl())
+                        .imageUrl(content.getImageUrl())
                         .relatedPart(content.getRelatedPart())
                         .build()
                 ).toList();
@@ -71,7 +71,7 @@ public class ContentService {
                 .title(content.getTitle())
                 .category(content.getCategory())
                 .contentText(content.getContentText())
-                .s3ImageUrl(content.getImageUrl())
+                .imageUrl(content.getImageUrl())
                 .relatedPart(content.getRelatedPart())
                 .build();
     }
