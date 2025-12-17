@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserServ
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,7 +68,7 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         }
 
         // 6) CustomOAuth2User 반환
-        // - getName()이 DB userId(String)을 반환하도록(생성자 마지막 인자) 유지
+        // - getName()이 DB userId(String)을 반환하도록 유지
         return new CustomOAuth2User(
                 Collections.singleton(new SimpleGrantedAuthority(roleKey)),
                 oAuth2Attributes.getAttributes(),
@@ -79,8 +80,10 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     /**
      * DB에 사용자 정보가 있으면 업데이트하고, 없으면 새로 저장합니다.
      *
-     * 중요: 동일 이메일로 provider가 섞이는 경우(LOCAL ↔ GOOGLE/KAKAO, GOOGLE ↔ KAKAO 등)
-     * 기존 계정을 덮어쓰면 로그인 체계가 깨질 수 있으므로 기본은 차단합니다.
+     * 선택지 A 정책:
+     * - 동일 이메일로 provider가 섞이면 로그인 실패(계정 연동 미지원)
+     * - 단, 실패는 RuntimeException이 아니라 OAuth2AuthenticationException으로 던져야
+     *   Spring Security failureHandler가 프론트 redirect로 처리할 수 있습니다.
      */
     private User saveOrUpdate(OAuth2Attributes attributes) {
 
@@ -89,13 +92,12 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         if (existingOpt.isPresent()) {
             User existing = existingOpt.get();
 
-            // provider 충돌 방어
-            // - 기존이 LOCAL인데 소셜이 들어오거나
-            // - 기존이 GOOGLE인데 KAKAO가 들어오는 등
+            // provider 충돌 방어 (LOCAL ↔ GOOGLE/KAKAO, GOOGLE ↔ KAKAO 등)
             if (existing.getProvider() != null && attributes.getProvider() != null
                     && existing.getProvider() != attributes.getProvider()) {
 
-                throw new RuntimeException(
+                throw new OAuth2AuthenticationException(
+                        new OAuth2Error("provider_mismatch"),
                         "이미 가입된 이메일입니다. 기존 로그인 방식(" + existing.getProvider() + ")으로 로그인해 주세요."
                 );
             }
