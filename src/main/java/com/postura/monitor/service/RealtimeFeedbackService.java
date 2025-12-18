@@ -280,7 +280,7 @@ public class RealtimeFeedbackService {
                 return "팔 지지 자세 감지! 손목/전완부 스트레칭 후, 양손을 무릎 위에 올려 바른 자세를 취해주세요.";
 
             default:
-                return "자세 분석 정보를 수신 중입니다. 잠시만 기다려주세요.";
+                return "화면에 사용자가 감지되지 않았습니다.";
         }
     }
 }
