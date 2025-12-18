@@ -29,7 +29,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/postura-backend:latest
+          tags: yswmon/postura-backend:latest
           file: ./Dockerfile
 
   deploy:
@@ -44,7 +44,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             # 1. 최신 이미지 가져오기
-            sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/postura-backend:latest
+            sudo docker pull yswmon/postura-backend:latest
             
             # 2. 기존 컨테이너 중지 및 제거 (없어도 에러 안 나게 처리)
             sudo docker stop postura-backend || true
@@ -62,7 +62,7 @@ jobs:
               -e KAKAO_CLIENT_SECRET='${{ secrets.KAKAO_SECRET }}' \
               -e GOOGLE_CLIENT_ID='${{ secrets.GOOGLE_ID }}' \
               -e GOOGLE_CLIENT_SECRET='${{ secrets.GOOGLE_SECRET }}' \
-              ${{ secrets.DOCKERHUB_USERNAME }}/postura-backend:latest
+              yswmon/postura-backend:latest
             
             # 4. 안 쓰는 오래된 이미지 삭제
             sudo docker image prune -f
