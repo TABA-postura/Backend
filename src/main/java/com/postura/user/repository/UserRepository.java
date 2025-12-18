@@ -17,16 +17,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     /**
-     * 이메일 존재 여부 확인
+     * 이메일 존재 여부 확인 (회원가입 중복 체크)
      */
     boolean existsByEmail(String email);
 
     /**
-     * OAuth 로그인용
-     * provider + providerId 로 사용자 조회
+     * OAuth 로그인용 (provider + providerId)
      */
-    Optional<User> findByProviderAndProviderId(
-            AuthProvider provider,
-            String providerId
-    );
+    Optional<User> findByProviderAndProviderId(AuthProvider provider, String providerId);
 }

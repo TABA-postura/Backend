@@ -7,8 +7,8 @@ import com.postura.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
+import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -32,32 +32,24 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
     @Override
     public OidcUser loadUser(OidcUserRequest userRequest) throws OAuth2AuthenticationException {
 
-        // 1) 기본 OIDC 유저 로드 (principal=DefaultOidcUser 생성)
         OidcUser oidcUser = delegate.loadUser(userRequest);
 
-        // 2) provider 식별자 (google 등)
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
-
-        // 3) userNameAttributeKey (보통 google=sub)
         String userNameAttributeName = userRequest.getClientRegistration()
                 .getProviderDetails()
                 .getUserInfoEndpoint()
                 .getUserNameAttributeName();
 
-        // 4) attributes -> OAuth2Attributes 변환
         Map<String, Object> attributes = oidcUser.getAttributes();
         OAuth2Attributes oAuth2Attributes =
                 OAuth2Attributes.of(registrationId, userNameAttributeName, attributes);
 
-        // 5) DB 저장/업데이트 (provider 충돌 방어 포함)
         User user = saveOrUpdate(oAuth2Attributes);
 
-        // 6) 권한 생성 (ROLE_ prefix 보장)
         String roleKey = user.getRole() != null ? user.getRole().getKey() : "ROLE_USER";
         if (roleKey != null && !roleKey.startsWith("ROLE_")) roleKey = "ROLE_" + roleKey;
         if (roleKey == null || roleKey.isBlank()) roleKey = "ROLE_USER";
 
-        // 7) CustomOidcUser로 감싸서 getName() = DB userId(String) 보장
         return new CustomOidcUser(
                 oidcUser,
                 Collections.singleton(new SimpleGrantedAuthority(roleKey)),
@@ -67,18 +59,14 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
         );
     }
 
-    /**
-     * 선택지 A 정책:
-     * - 동일 이메일인데 provider가 다르면 로그인 실패 (계정 연동 미지원)
-     * - 단, 실패는 RuntimeException이 아니라 OAuth2AuthenticationException으로 던져야
-     *   Spring Security failureHandler가 프론트 redirect로 처리할 수 있습니다.
-     */
     private User saveOrUpdate(OAuth2Attributes attributes) {
+
         Optional<User> existingOpt = userRepository.findByEmail(attributes.getEmail());
 
         if (existingOpt.isPresent()) {
             User existing = existingOpt.get();
 
+            // ✅ provider mismatch는 OAuth2AuthenticationException으로 던져야 failureHandler가 잡고 프론트로 리다이렉트됨
             if (existing.getProvider() != null && attributes.getProvider() != null
                     && existing.getProvider() != attributes.getProvider()) {
 

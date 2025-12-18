@@ -43,29 +43,18 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /**
-     * Security Filter Chain
-     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http
-                // 1) JWT 기반: CSRF 비활성화
                 .csrf(csrf -> csrf.disable())
-
-                // 2) Form Login / Basic 비활성화 (API 서버)
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
-
-                // 3) CORS
                 .cors(Customizer.withDefaults())
 
-                // 4) 세션 정책
-                // OAuth2 로그인 플로우는 기본적으로 Authorization Request(state 등)를 세션에 저장합니다.
-                // 완전 STATELESS 강제 시 환경에 따라 OAuth2가 불안정해질 수 있어 IF_REQUIRED를 권장합니다.
+                // OAuth2 플로우 안정성을 위해 IF_REQUIRED 유지 권장
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
 
-                // 5) 인가 규칙
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
@@ -94,7 +83,6 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // 6) OAuth2 로그인
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo -> userInfo
                                 .userService(customOAuth2UserService)
@@ -104,10 +92,8 @@ public class SecurityConfig {
                         .failureHandler(oAuth2AuthenticationFailureHandler)
                 )
 
-                // 7) 인증 실패는 401로 통일 (API 기준)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 
-                // 8) JWT 인증 필터
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
                         UsernamePasswordAuthenticationFilter.class);
 
@@ -115,30 +101,39 @@ public class SecurityConfig {
     }
 
     /**
-     * CORS 설정
+     * CORS 설정 (운영 도메인 최소화)
+     *
+     * 주의:
+     * - allowCredentials(true) 사용 시 allowedOrigins에 "*" 사용 불가
+     * - 프론트 Origin만 허용하면 됨 (API 자신의 도메인은 보통 필요 없음)
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "http://localhost:8080",
-                "https://d4s7gxwtaejst.cloudfront.net",
+        // ✅ 포트가 바뀌는 로컬 환경까지 커버하려면 patterns가 가장 편합니다.
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
                 "https://taba-postura.com",
                 "https://www.taba-postura.com",
-                "https://api.taba-postura.com",
-                "http://api.taba-postura.com:8080"
+                "https://d4s7gxwtaejst.cloudfront.net"
         ));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+
+        // Authorization, Content-Type 등 전부 허용(필요하면 나중에 최소화 가능)
         config.setAllowedHeaders(List.of("*"));
+
+        // 프론트에서 응답 헤더를 읽어야 할 때
         config.setExposedHeaders(List.of("Authorization", "Content-Type"));
+
         config.setAllowCredentials(true);
+
+        // ✅ Preflight 캐시(브라우저)로 OPTIONS 비용 감소
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
-
         return source;
     }
 }

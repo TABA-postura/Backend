@@ -48,14 +48,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (StringUtils.hasText(token) && jwtTokenProvider.validateToken(token)) {
                 try {
-                    // AccessToken이면 Authentication 생성 성공
                     Authentication authentication = jwtTokenProvider.getAuthentication(token);
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                     log.debug("JWT 인증 성공 | user='{}' | path={}", authentication.getName(), request.getRequestURI());
 
                 } catch (JwtException e) {
-                    // RefreshToken(auth 없음) 등이 Authorization에 들어온 경우가 대표적
-                    // 에러로 취급하지 않고 인증 미설정 상태로 진행
+                    // RefreshToken(auth 없음) 등이 Authorization에 들어온 경우 등
                     SecurityContextHolder.clearContext();
                     log.debug("JWT Authentication 생성 불가(AccessToken 아님/권한 없음) | path={} | msg={}",
                             request.getRequestURI(), e.getMessage());
@@ -65,7 +63,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
         } catch (Exception ex) {
-            // 어떤 예외든 인증 컨텍스트는 제거하고 체인 계속 진행
             SecurityContextHolder.clearContext();
             log.warn("JWT 필터 처리 중 예외 발생 | path={} | msg={}", request.getRequestURI(), ex.getMessage());
         }
@@ -75,14 +72,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     /**
      * 공개 API/리소스 목록
-     * - SecurityConfig의 permitAll과 최대한 정합 맞추는 게 중요합니다.
+     * - SecurityConfig의 permitAll과 정합을 맞춥니다.
      */
     private boolean isPublicEndpoint(String path) {
         return
                 // Auth API
                 path.startsWith("/api/auth/") ||
 
-                        // (프로젝트에서 별도로 쓰는 signup 경로 대비)
+                        // 프로젝트에서 별도로 쓰는 signup 경로 대비
                         path.startsWith("/api/user/signup") ||
 
                         // OAuth2 시작/콜백
@@ -100,11 +97,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         path.startsWith("/swagger-resources") ||
                         path.startsWith("/v3/api-docs") ||
 
+                        // AI 로그(permitAll)
+                        path.startsWith("/api/ai/log") ||
+
                         // Content/Static
                         path.startsWith("/api/content/") ||
                         path.startsWith("/videos/") ||
                         path.startsWith("/photo/") ||
-                        path.startsWith("/static/");
+                        path.startsWith("/static/") ||
+                        path.startsWith("/images/");
     }
 
     /**
