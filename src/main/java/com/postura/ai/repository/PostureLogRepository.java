@@ -28,4 +28,11 @@ public interface PostureLogRepository extends JpaRepository<PostureLog, Long> {
             LocalDateTime start,
             LocalDateTime end
     );
+
+    /**
+     * 특정 시간 이전에 생성된 모든 로그를 삭제합니다. (로그 정리용)
+     * @param limit 기준 시간
+     * @return 삭제된 행(row)의 개수
+     */
+    long deleteByTimestampBefore(LocalDateTime limit);
 }
