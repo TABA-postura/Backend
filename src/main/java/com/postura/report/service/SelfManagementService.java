@@ -26,130 +26,133 @@ public class SelfManagementService {
     private final AggregateStatRepository aggregateStatRepository;
     private final ContentService contentService;
 
-    // *************************************************************
-    // 1. 주간 리포트 데이터 조회 (메인 메서드)
-    // *************************************************************
+    /**
+     * 주간 리포트 데이터 조회 (하이브리드 로직)
+     * - 그래프/추천: 최근 7일(Rolling) 데이터 사용 (끊김 방지)
+     * - 요약 카드: 이번 주 월요일 ~ 오늘(Calendar) 데이터 사용
+     */
     @Transactional(readOnly = true)
-    public StatReportDto getWeeklyReport(Long userId, LocalDate weekStart) {
+    public StatReportDto getWeeklyReport(Long userId, LocalDate referenceDate) {
 
-        // 주간 리포트 기간 설정: 주 시작일 ~ 오늘 (미래 조회 방지)
-        LocalDate weekEnd = weekStart.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
-        LocalDate today = LocalDate.now();
+        // 1. [그래프 & 추천용] 최근 7일 (오늘 포함 과거 6일 ~ 오늘)
+        LocalDate rollingStart = referenceDate.minusDays(6);
+        List<AggregateStat> rollingStats = aggregateStatRepository
+                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, rollingStart, referenceDate);
 
-        if (weekEnd.isAfter(today)) {
-            weekEnd = today; // 조회 기간이 미래를 넘지 않도록 조정
+        // 2. [요약 카드용] 이번 주 월요일 ~ 오늘
+        LocalDate calendarMonday = referenceDate.with(DayOfWeek.MONDAY);
+        List<AggregateStat> calendarWeekStats = aggregateStatRepository
+                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, calendarMonday, referenceDate);
+
+        // 3. [전주 대비 비교용] 지난 주 월요일 ~ 지난 주 일요일
+        LocalDate lastMonday = calendarMonday.minusWeeks(1);
+        LocalDate lastSunday = calendarMonday.minusDays(1);
+        List<AggregateStat> lastWeekStats = aggregateStatRepository
+                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, lastMonday, lastSunday);
+
+        // 4. [달력용] 해당 월 전체 (1일 ~ 말일)
+        LocalDate monthStart = referenceDate.with(TemporalAdjusters.firstDayOfMonth());
+        LocalDate monthEnd = referenceDate.with(TemporalAdjusters.lastDayOfMonth());
+        List<AggregateStat> monthlyStats = aggregateStatRepository
+                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, monthStart, monthEnd);
+
+        // 데이터가 아예 없는 경우 처리
+        if (rollingStats.isEmpty()) {
+            throw new CustomException(ErrorCode.SESSION_NOT_FOUND, "조회된 통계 데이터가 없습니다.");
         }
 
-        // 1. 기간 내(이번 주) 모든 AggregateStat 조회
-        List<AggregateStat> weeklyStats = aggregateStatRepository
-                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, weekStart, weekEnd);
+        // --- 데이터 분석 및 가공 ---
 
-        if (weeklyStats.isEmpty()) {
-            // 통계가 없는 경우, 사용자에게 Not Found 예외 반환 (프론트엔드는 기본 화면 표시)
-            throw new CustomException(ErrorCode.SESSION_NOT_FOUND, "해당 기간의 통계 데이터가 없습니다.");
-        }
+        // A. 그래프 및 추천 (사용자 경험 연속성을 위해 Rolling 7일 기준)
+        Map<String, Integer> rollingDistribution = calculatePostureDistribution(rollingStats);
+        List<String> top3Issues = findTop3FrequentIssues(rollingDistribution);
 
-        // 2. 지난 주 통계 조회 (전주 대비 변화율 계산을 위해)
-        List<AggregateStat> previousWeeklyStats = getPreviousWeeklyStats(userId, weekStart);
+        // B. 요약 카드 (기획 의도에 맞게 이번 주 월요일부터 기준)
+        Double calendarAvgRatio = calculateAverageRatio(calendarWeekStats);
+        Integer calendarTotalWarning = calculateTotalWarning(calendarWeekStats);
 
-        // 3. 데이터 가공 및 분석
-        Map<String, Integer> distribution = calculatePostureDistribution(weeklyStats);
-        List<String> top3FrequentIssues = findTop3FrequentIssues(distribution); // 가장 빈번한 불량 자세 top3
+        // C. 전주 대비 변화율 계산 (이번 주 월~오늘 평균 vs 지난 주 월~일 평균)
+        Double lastWeekAvg = calculateAverageRatio(lastWeekStats);
+        Double ratioChangeVsLastWeek = calculateComparison(calendarAvgRatio, lastWeekAvg);
 
-        // 4. 추가 지표 계산
-        Double weeklyAvgRatio = calculateAverageRatio(weeklyStats);
-        Integer weeklyTotalWarning = calculateTotalWarning(weeklyStats);
-        Double ratioChangeVsPreviousWeek = calculateRatioChange(weeklyAvgRatio, previousWeeklyStats);
-
-        // 3. DTO 빌드 및 반환
-        AggregateStat latestStat = weeklyStats.get(weeklyStats.size() - 1);
+        // D. 최신 상태 (가장 최근 기록)
+        AggregateStat latestStat = rollingStats.get(rollingStats.size() - 1);
 
         return StatReportDto.builder()
-                // 그래프 데이터 구성
-                .dates(weeklyStats.stream().map(AggregateStat::getStatDate).collect(Collectors.toList()))
-                .correctRatios(weeklyStats.stream().map(AggregateStat::getCorrectRatio).collect(Collectors.toList()))
-                .warningCounts(weeklyStats.stream().map(AggregateStat::getTotalWarningCount).collect(Collectors.toList()))
+                // [그래프 데이터] 최근 7일치를 넘겨주어 월요일에도 그래프가 이어짐
+                .dates(rollingStats.stream().map(AggregateStat::getStatDate).collect(Collectors.toList()))
+                .correctRatios(rollingStats.stream().map(AggregateStat::getCorrectRatio).collect(Collectors.toList()))
+                .warningCounts(rollingStats.stream().map(AggregateStat::getTotalWarningCount).collect(Collectors.toList()))
 
-                // 요약 데이터 (가장 최근 기록을 사용)
-                .currentAvgRatio(latestStat.getCorrectRatio())
-                .weeklyAvgRatio(weeklyAvgRatio)
+                // [요약 데이터] 월요일마다 갱신되는 "이번 주" 수치
+                .currentAvgRatio(latestStat.getCorrectRatio()) // 오늘 수치
+                .weeklyAvgRatio(calendarAvgRatio)              // 이번 주 월요일부터의 평균
+                .weeklyTotalWarning(calendarTotalWarning)      // 이번 주 월요일부터의 총 경고
+                .ratioChangeVsPreviousWeek(ratioChangeVsLastWeek) // 지난 주 대비 변화율
+
+                // [기타 정보]
                 .currentTotalWarning(latestStat.getTotalWarningCount())
                 .currentConsecutiveAchievedDays(latestStat.getConsecutiveAchievedDays())
-                .mostFrequentIssue(top3FrequentIssues.isEmpty() ? "GOOD" : top3FrequentIssues.get(0))
+                .mostFrequentIssue(top3Issues.isEmpty() ? "GOOD" : top3Issues.get(0))
 
-                .weeklyTotalWarning(weeklyTotalWarning) // 주간 합산 경고 횟수
-                .ratioChangeVsPreviousWeek(ratioChangeVsPreviousWeek) // 전주 대비 변화율
+                // [분포 및 추천] 데이터가 풍부한 최근 7일 기준 분석 결과
+                .postureDistribution(rollingDistribution)
+                .recommendations(generateRecommendationsForTopIssues(top3Issues))
 
-                // 분포 및 추천
-                .postureDistribution(distribution)
-                .recommendations(generateRecommendationsForTopIssues(top3FrequentIssues))
+                // [달력] 한 달간의 성취도 목록
+                .monthlyAchievements(monthlyStats.stream()
+                        .map(s -> StatReportDto.CalendarAchievementDto.builder()
+                                .date(s.getStatDate())
+                                .ratio(s.getCorrectRatio())
+                                .achieved(s.isGoalAchieved())
+                                .build())
+                        .collect(Collectors.toList()))
                 .build();
     }
 
     // *************************************************************
-    // 2. 헬퍼 메서드 (분포 및 추천 로직)
+    // 헬퍼 메서드들 (계산 로직)
     // *************************************************************
 
     /**
-     * 지난 주의 통계 데이터를 조회합니다.
+     * 두 평균값 간의 변화율(%)을 계산합니다.
      */
-    private List<AggregateStat> getPreviousWeeklyStats(Long userId, LocalDate currentWeekStart) {
-        LocalDate previousWeekEnd = currentWeekStart.minusDays(1);
-        LocalDate previousWeekStart = previousWeekEnd.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-
-        return aggregateStatRepository
-                .findAllByUserIdAndStatDateBetweenOrderByStatDateAsc(userId, previousWeekStart, previousWeekEnd);
+    private Double calculateComparison(Double currentAvg, Double previousAvg) {
+        if (previousAvg == 0.0) {
+            return currentAvg > 0.0 ? 100.0 : 0.0;
+        }
+        double change = ((currentAvg - previousAvg) / previousAvg) * 100.0;
+        return Math.round(change * 100.0) / 100.0;
     }
 
     /**
-     * 주간 통계 목록의 평균 유지율을 계산합니다.
+     * 목록의 평균 유지율을 계산합니다.
      */
     private Double calculateAverageRatio(List<AggregateStat> stats) {
-        if (stats.isEmpty()) return 0.0;
-
+        if (stats == null || stats.isEmpty()) return 0.0;
         double avg = stats.stream()
                 .mapToDouble(AggregateStat::getCorrectRatio)
                 .average()
                 .orElse(0.0);
-
-        // 소수점 둘째 자리까지 반올림
         return Math.round(avg * 100.0) / 100.0;
     }
 
     /**
-     * 주간 통계 목록의 총 경고 횟수를 합산합니다.
+     * 목록의 총 경고 횟수를 합산합니다.
      */
     private Integer calculateTotalWarning(List<AggregateStat> stats) {
+        if (stats == null) return 0;
         return stats.stream()
                 .mapToInt(AggregateStat::getTotalWarningCount)
                 .sum();
     }
 
     /**
-     * 전주 대비 이번 주의 유지율 변화율(%)을 계산합니다.
+     * 자세 유형별 총 발생 횟수를 계산합니다.
      */
-    private Double calculateRatioChange(Double currentAvg, List<AggregateStat> previousStats) {
-        Double previousAvg = calculateAverageRatio(previousStats);
-
-        if (previousAvg == 0.0) {
-            return currentAvg > 0.0 ? 100.0 : 0.0; // 이전 주 통계가 없는데 이번 주 통계가 있으면 100% 증가로 간주
-        }
-
-        // (이번 주 평균 - 지난 주 평균) / 지난 주 평균 * 100
-        double change = ((currentAvg - previousAvg) / previousAvg) * 100.0;
-
-        // 소수점 둘째 자리까지 반올림
-        return Math.round(change * 100.0) / 100.0;
-    }
-
-    /**
-     * 주간 통계를 합산하여 자세 유형별 총 발생 횟수를 계산합니다.
-     */
-    private Map<String, Integer> calculatePostureDistribution(List<AggregateStat> weeklyStats) {
+    private Map<String, Integer> calculatePostureDistribution(List<AggregateStat> stats) {
         Map<String, Integer> distribution = new HashMap<>();
-
-        // 모든 자세 유형 카운트를 초기화하고 집계
-        for (AggregateStat stat : weeklyStats) {
+        for (AggregateStat stat : stats) {
             distribution.merge("FORWARD_HEAD", stat.getForwardHeadCount(), Integer::sum);
             distribution.merge("UNEQUAL_SHOULDERS", stat.getUnequalShouldersCount(), Integer::sum);
             distribution.merge("UPPER_BODY_TILT", stat.getUpperBodyTiltCount(), Integer::sum);
@@ -158,18 +161,15 @@ public class SelfManagementService {
             distribution.merge("HEAD_TILT", stat.getHeadTiltCount(), Integer::sum);
             distribution.merge("LEANING_ON_ARM", stat.getLeaningOnArmCount(), Integer::sum);
         }
-
-        // 횟수가 0인 항목은 제외하고 반환 (파이 차트 데이터 구성 용이)
         return distribution.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
-     * 가장 빈번하게 발생한 자세 불량 유형을 찾습니다.
+     * 가장 빈번한 자세 불량 유형 Top 3를 추출합니다.
      */
     private List<String> findTop3FrequentIssues(Map<String, Integer> distribution) {
-        // "Good"이나 발생 횟수 0인 항목은 제외하고 내림차순 정렬 후 상위 3개만 추출
         return distribution.entrySet().stream()
                 .filter(entry -> !entry.getKey().equalsIgnoreCase("GOOD") && entry.getValue() > 0)
                 .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
@@ -179,29 +179,22 @@ public class SelfManagementService {
     }
 
     /**
-     * 가장 빈번한 자세 불량 유형을 기반으로 ContentService를 호출하여 스트레칭을 추천합니다.
+     * 문제 유형에 맞는 스트레칭 가이드를 무작위로 추천합니다.
      */
     private List<RecommendationDto> generateRecommendationsForTopIssues(List<String> top3ProblemTypes) {
         List<RecommendationDto> recommendations = new ArrayList<>();
         Random random = new Random();
 
         for (String problemType : top3ProblemTypes) {
-            // 1. ContentService를 호출하여 해당 문제 유형과 관련된 모든 가이드 목록을 조회
             List<Content> guides = contentService.getGuidesByProblemType(problemType);
-
-            if (guides.isEmpty()) {
-                continue; // 가이드가 없으면 다음 문제 유형으로 이동
+            if (!guides.isEmpty()) {
+                Content randomGuide = guides.get(random.nextInt(guides.size()));
+                recommendations.add(RecommendationDto.builder()
+                        .problemType(problemType)
+                        .recommendedGuideTitle(randomGuide.getTitle())
+                        .guideId(randomGuide.getGuideId())
+                        .build());
             }
-
-            // 2. 무작위로 스트레칭 가이드 1개 선택
-            Content randomGuide = guides.get(random.nextInt(guides.size()));
-
-            // 3. RecommendationDto로 변환하여 목록에 추가
-            recommendations.add(RecommendationDto.builder()
-                    .problemType(problemType)
-                    .recommendedGuideTitle(randomGuide.getTitle())
-                    .guideId(randomGuide.getGuideId())
-                    .build());
         }
         return recommendations;
     }
