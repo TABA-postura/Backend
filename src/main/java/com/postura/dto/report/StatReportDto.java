@@ -30,4 +30,14 @@ public class StatReportDto {
 
     // 4. 맞춤 스트레칭 추천
     private final List<RecommendationDto> recommendations; // 추천 스트레칭 목록
+
+    private final List<CalendarAchievementDto> monthlyAchievements;
+
+    @Getter
+    @Builder
+    public static class CalendarAchievementDto {
+        private final LocalDate date;
+        private final Double ratio;
+        private final boolean achieved; // 80% 이상 여부
+    }
 }
