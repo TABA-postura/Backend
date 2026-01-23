@@ -148,4 +148,7 @@ src/main/java/com/postura/
 ├── util/                               # [전역 유틸리티]
 │   └── StringListConverter.java        # DB 컬럼과 자바 List 객체 간 데이터 변환 처리
 └── PosturaApplication.java             # [프로젝트 실행 클래스] Spring Boot 어플리케이션 메인
+```
+</details>
+
 ---
